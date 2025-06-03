@@ -26,4 +26,4 @@ supported_versions = ["3.x", "4.0"]
 [logging]
 level = "debug"
 console = true
-# file = "logs/mwxdump.log"
+file = "logs/mwxdump.log"

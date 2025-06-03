@@ -28,60 +28,7 @@ impl WindowsProcessDetector {
     }
 
     /// 使用tasklist命令获取进程列表，同时获取路径信息
-    async fn get_process_list_with_paths(&self) -> Result<Vec<(u32, String, String)>> {
-        // 使用wmic一次性获取所有微信进程的信息
-        let wechat_names = self.wechat_process_names.join("' OR Name='");
-        let where_clause = format!("Name='{}'", wechat_names);
-        
-        debug!("执行wmic命令，where子句: {}", where_clause);
-        
-        let output = Command::new("wmic")
-            .args(&["process", "where", &where_clause, "get", "ProcessId,Name,ExecutablePath", "/format:csv"])
-            .output()
-            .map_err(|_| WeChatError::ProcessNotFound)?;
-
-        if !output.status.success() {
-            warn!("wmic命令失败，回退到tasklist。错误输出: {}", String::from_utf8_lossy(&output.stderr));
-            return self.get_process_list_fallback().await;
-        }
-
-        let output_str = String::from_utf8_lossy(&output.stdout);
-        debug!("wmic输出: {}", output_str);
-        
-        let mut processes = Vec::new();
-
-        for line in output_str.lines().skip(1) {
-            let line = line.trim();
-            if line.is_empty() {
-                continue;
-            }
-            
-            debug!("解析行: {}", line);
-            let parts: Vec<&str> = line.split(',').collect();
-            if parts.len() >= 3 {
-                if let Ok(pid) = parts[2].parse::<u32>() {
-                    let path = parts[1].trim().to_string();
-                    let name = parts[3].trim().to_string();
-                    
-                    debug!("解析到进程: name={}, pid={}, path={}", name, pid, path);
-                    
-                    if self.wechat_process_names.iter().any(|wechat_name| name.eq_ignore_ascii_case(wechat_name)) {
-                        processes.push((pid, name, path));
-                    }
-                }
-            }
-        }
-
-        if processes.is_empty() {
-            warn!("wmic未找到微信进程，回退到tasklist");
-            return self.get_process_list_fallback().await;
-        }
-
-        Ok(processes)
-    }
-
-    /// 回退方案：使用tasklist获取进程列表
-    async fn get_process_list_fallback(&self) -> Result<Vec<(u32, String, String)>> {
+    async fn get_process_list(&self) -> Result<Vec<(u32, String, String)>> {
         let output = Command::new("tasklist")
             .args(&["/fo", "csv", "/nh"])
             .output()
@@ -273,10 +220,11 @@ impl WindowsProcessDetector {
 impl ProcessDetector for WindowsProcessDetector {
     async fn detect_processes(&self) -> Result<Vec<ProcessInfo>> {
         let mut processes = Vec::new();
-        let process_list = self.get_process_list_with_paths().await?;
+        tracing::debug!("开始检测微信进程...");
+        let process_list = self.get_process_list().await?;
 
         for (pid, name, path_str) in process_list {
-            tracing::debug!("发现微信进程: {} (PID: {})", name, pid);
+            tracing::debug!("发现微信进程: {} (PID: {}), Path: {}", name, pid, path_str);
 
             // 处理路径
             let path = if path_str.is_empty() {

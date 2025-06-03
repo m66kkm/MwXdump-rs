@@ -6,12 +6,11 @@ use crate::wechat::process::{create_detector, ProcessDetector};
 
 /// 执行进程检测测试
 pub async fn execute(context: &ExecutionContext) -> Result<()> {
-    println!("开始测试微信进程检测功能...");
-    println!("当前日志级别: {}", context.log_level());
+    tracing::info!("开始测试微信进程检测功能...");
     
     // 显示配置信息
     if let Some(data_dir) = context.wechat_data_dir() {
-        println!("配置的微信数据目录: {:?}", data_dir);
+        tracing::info!("配置的微信数据目录: {:?}", data_dir);
     }
     
     let detector = create_detector()?;

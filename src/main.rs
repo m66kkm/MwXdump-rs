@@ -30,8 +30,8 @@ async fn main() -> anyhow::Result<()> {
         }
     };
     
-    // 根据最终确定的日志级别初始化日志系统
-    init_tracing(context.log_level())?;
+    // 根据配置初始化日志系统
+    init_tracing(&context)?;
     
     info!("MwXdump 启动，日志级别: {}", context.log_level());
     
@@ -68,18 +68,72 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn init_tracing(log_level: &str) -> Result<()> {
-    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+fn init_tracing(context: &cli::context::ExecutionContext) -> Result<()> {
+    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, fmt};
+    use std::fs;
     
-    let env_filter = format!("MwXdump={}", log_level);
+    let logging_config = context.logging_config();
+    let env_filter = format!("{}={}", context.log_level(), context.log_level());
     
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| env_filter.into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| context.log_level().into());
+    
+    let registry = tracing_subscriber::registry().with(filter);
+    
+    // 根据配置决定输出方式
+    match (&logging_config.console, &logging_config.file) {
+        (true, Some(log_file_path)) => {
+            // 同时输出到控制台和文件
+            if let Some(parent_dir) = log_file_path.parent() {
+                fs::create_dir_all(parent_dir).map_err(|e| {
+                    anyhow::anyhow!("创建日志目录失败: {}", e)
+                })?;
+            }
+            
+            let file = std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .append(true)
+                .open(log_file_path)
+                .map_err(|e| anyhow::anyhow!("打开日志文件失败: {}", e))?;
+            
+            registry
+                .with(fmt::layer().with_target(false))
+                .with(fmt::layer().with_writer(file).with_target(true))
+                .init();
+        }
+        (true, None) => {
+            // 仅输出到控制台
+            registry
+                .with(fmt::layer().with_target(false))
+                .init();
+        }
+        (false, Some(log_file_path)) => {
+            // 仅输出到文件
+            if let Some(parent_dir) = log_file_path.parent() {
+                fs::create_dir_all(parent_dir).map_err(|e| {
+                    anyhow::anyhow!("创建日志目录失败: {}", e)
+                })?;
+            }
+            
+            let file = std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .append(true)
+                .open(log_file_path)
+                .map_err(|e| anyhow::anyhow!("打开日志文件失败: {}", e))?;
+            
+            registry
+                .with(fmt::layer().with_writer(file).with_target(true))
+                .init();
+        }
+        (false, None) => {
+            // 默认输出到控制台
+            registry
+                .with(fmt::layer().with_target(false))
+                .init();
+        }
+    }
     
     Ok(())
 }
