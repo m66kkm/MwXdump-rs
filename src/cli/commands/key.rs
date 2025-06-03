@@ -9,13 +9,16 @@ use crate::wechat::process::ProcessDetector;
 pub async fn execute() -> Result<()> {
     println!("开始测试微信密钥提取功能...");
     
+    // 设置更详细的日志级别，确保错误信息被捕获
+    tracing::debug!("开始执行密钥提取测试");
+    
     // 首先检测进程
     let detector = wechat::process::PlatformDetector::new()?;
     let processes = detector.detect_processes().await?;
     
     if processes.is_empty() {
         println!("❌ 未发现运行中的微信进程，无法测试密钥提取");
-        return Ok(());
+        return Err(crate::errors::WeChatError::ProcessNotFound.into());
     }
     
     println!("发现 {} 个微信进程，开始提取密钥...", processes.len());
@@ -30,7 +33,7 @@ pub async fn execute() -> Result<()> {
     
     if wechat_main_processes.is_empty() {
         println!("❌ 未发现WeChat.exe主进程");
-        return Ok(());
+        return Err(crate::errors::WeChatError::ProcessNotFound.into());
     }
     
     println!("发现 {} 个WeChat.exe主进程，开始提取密钥...", wechat_main_processes.len());
@@ -139,13 +142,16 @@ pub async fn execute() -> Result<()> {
     } else {
         println!("⚠️  密钥提取功能测试完成，但未能提取到有效密钥");
         println!("   这可能是由于:");
-        println!("   - 进程权限不足");
+        println!("   - 进程权限不足 (请尝试以管理员身份运行)");
         println!("   - 微信版本不支持");
         println!("   - 内存搜索算法需要优化");
+        return Err(crate::errors::WeChatError::KeyExtractionFailed("未能提取到有效密钥".to_string()).into());
     }
     
     Ok(())
 }
+
+// 这个函数已经不需要了，因为错误处理已经移到main.rs中
 
 #[cfg(test)]
 mod tests {

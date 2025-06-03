@@ -20,6 +20,7 @@ impl WindowsProcessDetector {
         Ok(Self {
             wechat_process_names: vec![
                 "WeChat.exe".to_string(),
+                "Weixin.exe".to_string(),  // 添加微信4.0的主可执行文件名
                 "WeChatApp.exe".to_string(),
                 "WeChatAppEx.exe".to_string(),
             ],
