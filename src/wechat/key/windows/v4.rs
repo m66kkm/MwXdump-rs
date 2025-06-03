@@ -131,7 +131,7 @@ impl KeyExtractor for V4KeyExtractor {
         
         // 确认是V4版本
         match &process.version {
-            crate::wechat::process::WeChatVersion::V40 { exact } => {
+            crate::wechat::process::WeChatVersion::V4x { exact } => {
                 info!("确认V4.0版本: {}", exact);
             },
             crate::wechat::process::WeChatVersion::V3x { .. } => {

@@ -130,14 +130,9 @@ impl KeyVersion {
     pub fn from_process(process: &ProcessInfo) -> Self {
         use tracing::{debug, info, warn};
         
+        debug!("开始为进程 {} (PID: {}) 推断密钥版本", process.name, process.pid);
         debug!("分析进程版本: 进程名={}, 版本={:?}, 路径={:?}",
                process.name, process.version, process.path);
-        
-        // 只处理WeChat.exe主进程
-        if !process.name.eq_ignore_ascii_case("WeChat.exe") {
-            warn!("非WeChat.exe主进程，不应进行密钥提取: {}", process.name);
-            return KeyVersion::V3x; // 默认返回，但实际不应该被使用
-        }
         
         match &process.version {
             crate::wechat::process::WeChatVersion::V3x { exact } => {
@@ -150,7 +145,7 @@ impl KeyVersion {
                     KeyVersion::V3x
                 }
             },
-            crate::wechat::process::WeChatVersion::V40 { exact } => {
+            crate::wechat::process::WeChatVersion::V4x { exact } => {
                 info!("检测到V4.0版本: {}", exact);
                 // 验证版本号格式
                 if exact.chars().any(|c| c.is_ascii_digit()) && exact.contains('.') {

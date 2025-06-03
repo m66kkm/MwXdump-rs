@@ -3,7 +3,6 @@
 use crate::errors::Result;
 use crate::wechat;
 use crate::wechat::key::KeyExtractor;
-use crate::wechat::process::ProcessDetector;
 
 /// 执行密钥提取测试
 pub async fn execute() -> Result<()> {
@@ -12,57 +11,32 @@ pub async fn execute() -> Result<()> {
     // 设置更详细的日志级别，确保错误信息被捕获
     tracing::debug!("开始执行密钥提取测试");
     
-    // 首先检测进程
+    // 使用统一方法获取有效的主进程
     let detector = wechat::process::PlatformDetector::new()?;
-    let processes = detector.detect_processes().await?;
+    let valid_main_processes = detector.get_valid_main_processes().await?;
     
-    if processes.is_empty() {
-        println!("❌ 未发现运行中的微信进程，无法测试密钥提取");
+    tracing::debug!("检测到 {} 个有效的WeChat.exe主进程", valid_main_processes.len());
+
+    if valid_main_processes.is_empty() {
+        println!("❌ 未发现有效版本的WeChat.exe主进程");
+        println!("   请确保：");
+        println!("   - 微信正在运行");
+        println!("   - 微信版本支持密钥提取");
+        println!("   - 程序有足够权限访问进程信息");
         return Err(crate::errors::WeChatError::ProcessNotFound.into());
     }
     
-    println!("发现 {} 个微信进程，开始提取密钥...", processes.len());
+    println!("发现 {} 个有效的WeChat.exe主进程", valid_main_processes.len());
     
     let mut success_count = 0;
     let mut total_count = 0;
     
-    // 只处理WeChat.exe主进程，忽略WeChatAppEx.exe子进程
-    let wechat_main_processes: Vec<_> = processes.iter()
-        .filter(|process| process.name.eq_ignore_ascii_case("WeChat.exe"))
-        .collect();
-    
-    if wechat_main_processes.is_empty() {
-        println!("❌ 未发现WeChat.exe主进程");
-        return Err(crate::errors::WeChatError::ProcessNotFound.into());
-    }
-    
-    println!("发现 {} 个WeChat.exe主进程，开始提取密钥...", wechat_main_processes.len());
-    
-    for process in wechat_main_processes.iter() {
+    for process in valid_main_processes.iter() {
         total_count += 1;
         println!("\n🔍 正在处理WeChat.exe主进程 (PID: {})", process.pid);
         println!("   进程路径: {:?}", process.path);
         println!("   检测到的版本: {:?}", process.version);
-        
-        // 检查版本是否有效（不是Unknown且有具体版本号）
-        let has_valid_version = match &process.version {
-            wechat::process::WeChatVersion::V3x { exact } => {
-                // 检查是否是真实的版本号（包含数字和点）
-                exact.chars().any(|c| c.is_ascii_digit()) && exact.contains('.')
-            },
-            wechat::process::WeChatVersion::V40 { exact } => {
-                // 检查是否是真实的版本号（包含数字和点）
-                exact.chars().any(|c| c.is_ascii_digit()) && exact.contains('.')
-            },
-            wechat::process::WeChatVersion::Unknown => false,
-        };
-        
-        if has_valid_version {
-            println!("   ✅ 发现有效版本，将使用此进程进行密钥提取");
-        } else {
-            println!("   ⚠️  版本信息无效，跳过此进程");
-            continue;
-        }
+        println!("   ✅ 版本已验证有效，开始密钥提取");
         
         // 根据进程版本创建密钥提取器
         let key_version = wechat::key::KeyVersion::from_process(process);

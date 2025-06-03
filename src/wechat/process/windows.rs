@@ -147,7 +147,7 @@ impl WindowsProcessDetector {
             debug!("检测到版本信息: {}", version_str);
             
             if version_str.starts_with("4.") {
-                return Ok(WeChatVersion::V40 { exact: version_str });
+                return Ok(WeChatVersion::V4x { exact: version_str });
             } else if version_str.starts_with("3.") {
                 return Ok(WeChatVersion::V3x { exact: version_str });
             }
@@ -231,6 +231,41 @@ impl WindowsProcessDetector {
 
         warn!("未找到微信数据目录");
         Ok(None)
+    }
+
+    /// 获取 WeChat.exe 主进程（排除子进程）
+    pub async fn get_main_wechat_processes(&self) -> Result<Vec<ProcessInfo>> {
+        
+        let all_processes = self.detect_processes().await?;
+        println!("检测到 {} 个微信相关进程", all_processes.len());
+
+        Ok(all_processes.into_iter()
+            // .filter(|process| process.name.eq_ignore_ascii_case("WeChat.exe") | process.name.eq_ignore_ascii_case("Weixin.exe"))
+            .collect())
+    }
+
+    /// 验证进程版本是否有效（包含数字和点号，非Unknown）
+    pub fn validate_process_version(&self, process: &ProcessInfo) -> bool {
+        match &process.version {
+            WeChatVersion::V3x { exact } | WeChatVersion::V4x { exact } => {
+                exact.chars().any(|c| c.is_ascii_digit()) && exact.contains('.')
+            },
+            WeChatVersion::Unknown => false,
+        }
+    }
+
+    /// 获取有效版本的 WeChat.exe 主进程
+    pub async fn get_valid_main_processes(&self) -> Result<Vec<ProcessInfo>> {
+        tracing::info!("开始获取有效的WeChat.exe主进程...");
+        let main_processes = self.get_main_wechat_processes().await?;
+        Ok(main_processes.into_iter()
+            .filter(|p| self.validate_process_version(p))
+            .collect())
+    }
+
+    /// 获取所有微信进程（包括子进程）- 保持向后兼容
+    pub async fn get_all_wechat_processes(&self) -> Result<Vec<ProcessInfo>> {
+        self.detect_processes().await
     }
 }
 
@@ -319,5 +354,113 @@ mod tests {
             println!("进程: {} (PID: {}, 版本: {:?})", 
                 process.name, process.pid, process.version);
         }
+#[tokio::test]
+    async fn test_get_main_wechat_processes() {
+        let detector = WindowsProcessDetector::new().unwrap();
+        let result = detector.get_main_wechat_processes().await;
+        
+        // 测试应该成功，即使没有找到WeChat.exe进程
+        assert!(result.is_ok());
+        
+        let main_processes = result.unwrap();
+        println!("检测到的WeChat.exe主进程数量: {}", main_processes.len());
+        
+        // 验证所有返回的进程都是WeChat.exe
+        for process in &main_processes {
+            assert!(process.name.eq_ignore_ascii_case("WeChat.exe"));
+            println!("主进程: {} (PID: {}, 版本: {:?})", 
+                process.name, process.pid, process.version);
+        }
     }
+
+    #[tokio::test]
+    async fn test_validate_process_version() {
+        let detector = WindowsProcessDetector::new().unwrap();
+        
+        // 创建测试用的进程信息
+        let valid_v3_process = ProcessInfo {
+            pid: 1234,
+            name: "WeChat.exe".to_string(),
+            path: std::path::PathBuf::from("C:\\Program Files\\Tencent\\WeChat\\WeChat.exe"),
+            version: WeChatVersion::V3x { exact: "3.9.5.81".to_string() },
+            data_dir: None,
+            detected_at: chrono::Utc::now(),
+        };
+        
+        let valid_v4_process = ProcessInfo {
+            pid: 5678,
+            name: "WeChat.exe".to_string(),
+            path: std::path::PathBuf::from("C:\\Program Files\\Tencent\\WeChat\\WeChat.exe"),
+            version: WeChatVersion::V4x { exact: "4.0.0.1000".to_string() },
+            data_dir: None,
+            detected_at: chrono::Utc::now(),
+        };
+        
+        let invalid_unknown_process = ProcessInfo {
+            pid: 9999,
+            name: "WeChat.exe".to_string(),
+            path: std::path::PathBuf::from("C:\\Program Files\\Tencent\\WeChat\\WeChat.exe"),
+            version: WeChatVersion::Unknown,
+            data_dir: None,
+            detected_at: chrono::Utc::now(),
+        };
+        
+        let invalid_v3_process = ProcessInfo {
+            pid: 1111,
+            name: "WeChat.exe".to_string(),
+            path: std::path::PathBuf::from("C:\\Program Files\\Tencent\\WeChat\\WeChat.exe"),
+            version: WeChatVersion::V3x { exact: "unknown".to_string() },
+            data_dir: None,
+            detected_at: chrono::Utc::now(),
+        };
+        
+        // 测试有效版本
+        assert!(detector.validate_process_version(&valid_v3_process));
+        assert!(detector.validate_process_version(&valid_v4_process));
+        
+        // 测试无效版本
+        assert!(!detector.validate_process_version(&invalid_unknown_process));
+        assert!(!detector.validate_process_version(&invalid_v3_process));
+        
+        println!("版本验证测试通过");
+    }
+
+    #[tokio::test]
+    async fn test_get_valid_main_processes() {
+        let detector = WindowsProcessDetector::new().unwrap();
+        let result = detector.get_valid_main_processes().await;
+        
+        // 测试应该成功
+        assert!(result.is_ok());
+        let valid_processes = result.unwrap();
+        println!("检测到的有效WeChat.exe主进程数量: {}", valid_processes.len());
+        
+        // 验证所有返回的进程都是WeChat.exe且版本有效
+        for process in &valid_processes {
+            assert!(process.name.eq_ignore_ascii_case("WeChat.exe"));
+            assert!(detector.validate_process_version(process));
+            println!("有效主进程: {} (PID: {}, 版本: {:?})",
+                process.name, process.pid, process.version);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_all_wechat_processes() {
+        let detector = WindowsProcessDetector::new().unwrap();
+        let result = detector.get_all_wechat_processes().await;
+        
+        // 测试应该成功
+        assert!(result.is_ok());
+        
+        let all_processes = result.unwrap();
+        println!("检测到的所有微信进程数量: {}", all_processes.len());
+        
+        // 验证所有返回的进程都是微信相关进程
+        for process in &all_processes {
+            let is_wechat_process = detector.wechat_process_names.iter()
+                .any(|name| process.name.eq_ignore_ascii_case(name));
+            assert!(is_wechat_process, "进程 {} 不在微信进程名列表中", process.name);
+        }
+    }
+}
 }

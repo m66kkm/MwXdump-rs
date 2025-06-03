@@ -43,7 +43,7 @@ impl KeyExtractor for V3KeyExtractor {
             crate::wechat::process::WeChatVersion::V3x { exact } => {
                 info!("确认V3版本: {}", exact);
             },
-            crate::wechat::process::WeChatVersion::V40 { .. } => {
+            crate::wechat::process::WeChatVersion::V4x { .. } => {
                 return Err(WeChatError::KeyExtractionFailed("进程是V4.0版本，不应使用V3提取器".to_string()).into());
             },
             crate::wechat::process::WeChatVersion::Unknown => {

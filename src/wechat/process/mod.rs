@@ -17,7 +17,7 @@ pub enum WeChatVersion {
     /// 3.x版本
     V3x { exact: String },
     /// 4.0版本
-    V40 { exact: String },
+    V4x { exact: String },
     /// 未知版本
     Unknown,
 }
@@ -103,7 +103,7 @@ impl WeChatVersion {
     pub fn version_string(&self) -> &str {
         match self {
             WeChatVersion::V3x { exact } => exact,
-            WeChatVersion::V40 { exact } => exact,
+            WeChatVersion::V4x { exact } => exact,
             WeChatVersion::Unknown => "unknown",
         }
     }
@@ -113,8 +113,8 @@ impl WeChatVersion {
         matches!(self, WeChatVersion::V3x { .. })
     }
     
-    /// 是否为4.0版本
-    pub fn is_v40(&self) -> bool {
-        matches!(self, WeChatVersion::V40 { .. })
+    /// 是否为4.x版本
+    pub fn is_v4x(&self) -> bool {
+        matches!(self, WeChatVersion::V4x { .. })
     }
 }
