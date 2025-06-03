@@ -276,7 +276,7 @@ impl ProcessDetector for WindowsProcessDetector {
         let process_list = self.get_process_list_with_paths().await?;
 
         for (pid, name, path_str) in process_list {
-            debug!("发现微信进程: {} (PID: {})", name, pid);
+            tracing::debug!("发现微信进程: {} (PID: {})", name, pid);
 
             // 处理路径
             let path = if path_str.is_empty() {

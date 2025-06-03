@@ -1,0 +1,29 @@
+# MwXdump-rs 配置文件示例
+
+[http]
+host = "127.0.0.1"
+port = 5030
+enable_cors = true
+
+[database]
+work_dir = "./work"
+pool_size = 10
+connection_timeout = 30
+
+[wechat]
+# 微信数据目录（可选）
+data_dir = "C:/Users/Username/Documents/WeChat Files"
+
+# 预设的数据密钥（可选，十六进制格式）
+data_key = "your_preset_key_here"
+
+# 是否启用自动解密
+auto_decrypt = false
+
+# 支持的微信版本
+supported_versions = ["3.x", "4.0"]
+
+[logging]
+level = "debug"
+console = true
+# file = "logs/mwxdump.log"

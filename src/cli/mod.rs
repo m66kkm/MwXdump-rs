@@ -6,6 +6,9 @@ use clap::{CommandFactory, Parser, Subcommand};
 use crate::errors::Result;
 
 pub mod commands;
+pub mod context;
+
+use context::ExecutionContext;
 
 /// MwXdump-rs 命令行应用
 #[derive(Parser)]
@@ -18,8 +21,8 @@ pub struct Cli {
     pub config: Option<String>,
     
     /// 日志级别
-    #[arg(short, long, default_value = "info")]
-    pub log_level: String,
+    #[arg(short, long)]
+    pub log_level: Option<String>,
     
     /// 子命令
     #[command(subcommand)]
@@ -78,9 +81,25 @@ pub enum Commands {
 impl Cli {
     /// 执行命令
     pub async fn execute(self) -> Result<()> {
-        match self.command {
+        // 解构 self 以避免部分移动问题
+        let Cli { config, log_level, command } = self;
+        
+        // 创建执行上下文
+        let context = ExecutionContext::new(config, log_level)?;
+        
+        Self::execute_command_with_context(command, &context).await
+    }
+    
+    /// 使用已有上下文执行命令
+    pub async fn execute_with_context(self, context: ExecutionContext) -> Result<()> {
+        Self::execute_command_with_context(self.command, &context).await
+    }
+    
+    /// 内部方法：使用上下文执行具体命令
+    async fn execute_command_with_context(command: Option<Commands>, context: &ExecutionContext) -> Result<()> {
+        match command {
             Some(Commands::Key) => {
-                commands::key::execute().await
+                commands::key::execute(context).await
             }
 
             Some(Commands::Decrypt {
@@ -99,19 +118,19 @@ impl Cli {
                     validate_only,
                     threads,
                 };
-                commands::decrypt::handle_decrypt(args).await
+                commands::decrypt::handle_decrypt(context, args).await
             }
             Some(Commands::Version) => {
-                commands::version::execute().await
+                commands::version::execute(context).await
             }
             Some(Commands::DumpMemory { pid }) => {
-                commands::dump_memory::execute(pid).await
+                commands::dump_memory::execute(context, pid).await
             }
             Some(Commands::Process) => {
-                commands::process::execute().await
+                commands::process::execute(context).await
             }
             None => {
-                // 没有子命令时启动TUI
+                // 没有子命令时显示帮助
                 println!("{}", Self::command().render_help());
                 Ok(())
             }

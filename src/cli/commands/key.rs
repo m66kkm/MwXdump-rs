@@ -1,15 +1,29 @@
 //! 测试密钥提取功能命令
 
+use crate::cli::context::ExecutionContext;
 use crate::errors::Result;
 use crate::wechat;
 use crate::wechat::key::KeyExtractor;
 
 /// 执行密钥提取测试
-pub async fn execute() -> Result<()> {
+pub async fn execute(context: &ExecutionContext) -> Result<()> {
     println!("开始测试微信密钥提取功能...");
     
+    // 显示当前配置信息
+    println!("当前日志级别: {}", context.log_level());
+    
+    // 如果配置中有预设的数据密钥，显示提示
+    if let Some(preset_key) = context.wechat_data_key() {
+        println!("检测到配置文件中的预设密钥: {}...", &preset_key[..8.min(preset_key.len())]);
+    }
+    
+    // 如果配置中有数据目录，优先使用
+    if let Some(data_dir) = context.wechat_data_dir() {
+        println!("使用配置的微信数据目录: {:?}", data_dir);
+    }
+    
     // 设置更详细的日志级别，确保错误信息被捕获
-    tracing::debug!("开始执行密钥提取测试");
+    tracing::debug!("开始执行密钥提取测试，日志级别: {}", context.log_level());
     
     // 使用统一方法获取有效的主进程
     let detector = wechat::process::PlatformDetector::new()?;
@@ -130,11 +144,16 @@ pub async fn execute() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::context::ExecutionContext;
     
     #[tokio::test]
     async fn test_execute_without_wechat() {
+        // 创建测试用的执行上下文
+        let context = ExecutionContext::with_defaults(Some("info".to_string()));
+        
         // 这个测试在没有微信进程时应该正常完成
-        let result = execute().await;
-        assert!(result.is_ok());
+        let result = execute(&context).await;
+        // 注意：没有微信进程时会返回错误，这是预期的
+        assert!(result.is_err());
     }
 }

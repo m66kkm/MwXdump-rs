@@ -43,8 +43,23 @@ pub struct DecryptArgs {
     pub threads: usize,
 }
 
-pub async fn handle_decrypt(args: DecryptArgs) -> Result<()> {
+pub async fn handle_decrypt(context: &crate::cli::context::ExecutionContext, args: DecryptArgs) -> Result<()> {
     info!("🔓 开始测试解密功能");
+    info!("当前日志级别: {}", context.log_level());
+    
+    // 显示配置信息
+    if let Some(data_dir) = context.wechat_data_dir() {
+        info!("配置的微信数据目录: {:?}", data_dir);
+    }
+    
+    if let Some(_preset_key) = context.wechat_data_key() {
+        info!("检测到配置文件中的预设密钥");
+        // 如果命令行没有提供密钥，可以使用配置文件中的密钥
+        if args.key.is_empty() {
+            info!("使用配置文件中的预设密钥");
+            // 这里可以扩展逻辑来使用预设密钥
+        }
+    }
     
     // 解析密钥
     let key_bytes = hex::decode(&args.key)

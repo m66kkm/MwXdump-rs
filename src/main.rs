@@ -18,16 +18,25 @@ use cli::Cli;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // 初始化日志系统
-    init_tracing()?;
-    
-    info!("MwXdump 启动");
-    
     // 解析命令行参数
     let cli = Cli::parse();
     
-    // 执行命令
-    if let Err(e) = cli.execute().await {
+    // 创建执行上下文以确定最终的日志级别
+    let context = match cli::context::ExecutionContext::new(cli.config.clone(), cli.log_level.clone()) {
+        Ok(ctx) => ctx,
+        Err(e) => {
+            eprintln!("创建执行上下文失败: {}", e);
+            std::process::exit(1);
+        }
+    };
+    
+    // 根据最终确定的日志级别初始化日志系统
+    init_tracing(context.log_level())?;
+    
+    info!("MwXdump 启动，日志级别: {}", context.log_level());
+    
+    // 执行命令，传递已创建的上下文
+    if let Err(e) = cli.execute_with_context(context).await {
         error!("执行失败: {}", e);
         
         // 打印更详细的错误信息到控制台
@@ -59,13 +68,15 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn init_tracing() -> Result<()> {
+fn init_tracing(log_level: &str) -> Result<()> {
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+    
+    let env_filter = format!("MwXdump={}", log_level);
     
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "MwXdump=info".into()),
+                .unwrap_or_else(|_| env_filter.into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();

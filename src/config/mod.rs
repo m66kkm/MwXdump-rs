@@ -180,6 +180,7 @@ impl AppConfig {
 }
 
 /// 配置服务
+#[derive(Debug)]
 pub struct ConfigService {
     config: AppConfig,
     config_path: Option<PathBuf>,
