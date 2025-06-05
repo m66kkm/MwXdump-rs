@@ -86,4 +86,4 @@ cargo run -- server --host 127.0.0.1 --port 5030
 
 ## 许可证
 
-Apache-2.0
+AGPL-3.0
