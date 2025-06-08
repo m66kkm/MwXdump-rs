@@ -6,7 +6,7 @@ use crate::wechat::process::ProcessInfo;
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{debug, error, info, warn};
+use tracing::info;
 
 #[cfg(target_os = "windows")]
 pub mod v3;
@@ -19,16 +19,6 @@ pub mod winapi;
 #[cfg(target_os = "windows")]
 pub mod memory;
 
-#[cfg(target_os = "windows")]
-pub use self::validator::DatabaseValidator;
-#[cfg(target_os = "windows")]
-pub use self::v3::V3KeyExtractor;
-#[cfg(target_os = "windows")]
-pub use self::v4::V4KeyExtractor;
-#[cfg(target_os = "windows")]
-pub use self::winapi::{WindowsApi, MemoryInfo, ModuleInfo};
-#[cfg(target_os = "windows")]
-pub use self::memory::{MemorySearcher, SearchConfig};
 
 /// Windows平台的密钥提取器
 pub struct WindowsKeyExtractor {

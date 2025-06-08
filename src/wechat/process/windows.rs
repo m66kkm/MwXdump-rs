@@ -2,13 +2,14 @@
 
 use super::{ProcessDetector, ProcessInfo, WeChatVersion};
 use crate::errors::{Result, WeChatError};
+
 use async_trait::async_trait;
 use chrono::Utc;
 use std::path::PathBuf;
 use std::process::Command;
 use tracing::{debug, info, warn};
 use windows::Win32::System::Registry::HKEY_CURRENT_USER;
-use crate::utils::win_registry;
+
 /// Windows平台的进程检测器
 
 const WECHAT_REG_KEY_PATH: &str = "Software\\Tencent\\WeChat";
@@ -68,13 +69,13 @@ impl WindowsProcessDetector {
     /// 使用wmic命令获取进程的可执行文件路径
     async fn get_process_path(&self, pid: u32) -> Result<PathBuf> {
         
-        if let Ok(reg_path) = win_registry::get_string_from_registry(
-            HKEY_CURRENT_USER,
-            WECHAT_REG_KEY_PATH,
-            WECHAT_FILES_VALUE_NAME
-        ) {
-            tracing::info!("从注册表获取到路径: {}", reg_path);
-        }
+        // if let Ok(reg_path) = win_registry::get_string_from_registry(
+        //     HKEY_CURRENT_USER,
+        //     WECHAT_REG_KEY_PATH,
+        //     WECHAT_FILES_VALUE_NAME
+        // ) {
+        //     tracing::info!("从注册表获取到路径: {}", reg_path);
+        // }
 
         let output = Command::new("wmic")
             .args(&["process", "where", &format!("ProcessId={}", pid), "get", "ExecutablePath", "/format:list"])

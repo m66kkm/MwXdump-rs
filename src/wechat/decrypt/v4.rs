@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use std::path::Path;
 use tokio::fs::File;
-use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, SeekFrom};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{debug, info, warn};
 use zeroize::Zeroize;
 
@@ -13,7 +13,7 @@ use super::{
         derive_keys_v4, is_database_encrypted, decrypt_page, verify_page_hmac,
         SALT_SIZE, SQLITE_HEADER,
     },
-    DecryptConfig, DecryptVersion, Decryptor, ProgressCallback,
+    DecryptConfig, Decryptor, ProgressCallback,
 };
 
 /// V4版本解密器

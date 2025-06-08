@@ -129,7 +129,7 @@ impl fmt::Display for WeChatKey {
 impl KeyVersion {
     /// 从进程信息推断密钥版本
     pub fn from_process(process: &ProcessInfo) -> Self {
-        use tracing::{debug, info, warn};
+        use tracing::{info, warn};
         
         info!("开始为进程 {} (PID: {}) 推断密钥版本", process.name, process.pid);
         info!("分析进程版本: 进程名={}, 版本={:?}, 路径={:?}",

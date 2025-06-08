@@ -7,9 +7,8 @@ use hmac::{Hmac, Mac};
 use pbkdf2::pbkdf2_hmac;
 use sha1::Sha1;
 use sha2::Sha512;
-use std::io::Cursor;
 use tracing::{debug, warn};
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::Zeroize;
 
 use crate::errors::{Result, WeChatError};
 use super::DecryptConfig;

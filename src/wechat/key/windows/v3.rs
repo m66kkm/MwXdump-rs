@@ -5,7 +5,7 @@ use crate::wechat::key::{KeyExtractor, KeyVersion, WeChatKey};
 use crate::wechat::process::ProcessInfo;
 use super::memory::{MemorySearcher, SearchConfig};
 use async_trait::async_trait;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 /// V3版本密钥提取器
 pub struct V3KeyExtractor {

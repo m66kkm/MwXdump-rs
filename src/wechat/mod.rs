@@ -7,7 +7,6 @@ pub mod process;
 use crate::errors::Result;
 
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 
 /// 微信版本信息
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
