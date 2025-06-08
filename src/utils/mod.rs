@@ -1,4 +1,6 @@
-//! Windows 注册表工具类
+//! 辅助类
+//!
 
-#[cfg(windows)]
-pub mod win_registry;
+pub mod windows_registry;
+
+

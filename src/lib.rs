@@ -17,7 +17,6 @@ pub mod models;
 pub mod ui;
 pub mod wechat;
 pub mod utils;
-
 // 重新导出常用类型
 pub use errors::{MwxDumpError, Result};
 pub use models::{Message, Contact, ChatRoom, Session};

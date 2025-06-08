@@ -12,6 +12,8 @@ mod mcp;
 mod models;
 mod ui;
 mod wechat;
+mod utils;
+
 use cli::Cli;
 
 #[tokio::main]

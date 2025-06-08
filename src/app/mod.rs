@@ -9,7 +9,6 @@ pub mod manager;
 pub mod context;
 
 pub use manager::Manager;
-pub use context::AppContext;
 
 /// 应用主结构
 pub struct App {
