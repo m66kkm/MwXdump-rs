@@ -5,6 +5,7 @@
 //! - 支持MCP协议集成AI助手
 //! - Terminal UI界面
 
+
 pub mod app;
 pub mod cli;
 pub mod config;
@@ -15,6 +16,7 @@ pub mod mcp;
 pub mod models;
 pub mod ui;
 pub mod wechat;
+pub mod utils;
 
 // 重新导出常用类型
 pub use errors::{MwxDumpError, Result};
