@@ -5,22 +5,12 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use crate::wechat::WeChatVersion;
 
 #[cfg(target_os = "windows")]
 mod windows;
 #[cfg(target_os = "macos")]
 mod macos;
-
-/// 微信版本信息
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum WeChatVersion {
-    /// 3.x版本
-    V3x { exact: String },
-    /// 4.0版本
-    V4x { exact: String },
-    /// 未知版本
-    Unknown,
-}
 
 /// 进程信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -104,8 +94,13 @@ impl WeChatVersion {
         match self {
             WeChatVersion::V3x { exact } => exact,
             WeChatVersion::V4x { exact } => exact,
+            WeChatVersion::V3xW { exact } => exact,
+            WeChatVersion::V4xW { exact } => exact,            
             WeChatVersion::Unknown => "unknown",
         }
+    }
+    pub fn is_wechat_work(&self) -> bool {
+        matches!(self, WeChatVersion::V3xW { .. }) || matches!(self, WeChatVersion::V4xW { .. }) 
     }
     
     /// 是否为3.x版本

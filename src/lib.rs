@@ -15,7 +15,6 @@ pub mod mcp;
 pub mod models;
 pub mod ui;
 pub mod wechat;
-pub mod wechatdb;
 
 // 重新导出常用类型
 pub use errors::{MwxDumpError, Result};

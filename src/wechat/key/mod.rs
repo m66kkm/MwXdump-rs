@@ -7,6 +7,7 @@ use crate::wechat::process::ProcessInfo;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use crate::wechat::WeChatVersion;
 
 #[cfg(target_os = "windows")]
 mod windows;
@@ -130,12 +131,12 @@ impl KeyVersion {
     pub fn from_process(process: &ProcessInfo) -> Self {
         use tracing::{debug, info, warn};
         
-        debug!("开始为进程 {} (PID: {}) 推断密钥版本", process.name, process.pid);
-        debug!("分析进程版本: 进程名={}, 版本={:?}, 路径={:?}",
+        info!("开始为进程 {} (PID: {}) 推断密钥版本", process.name, process.pid);
+        info!("分析进程版本: 进程名={}, 版本={:?}, 路径={:?}",
                process.name, process.version, process.path);
         
         match &process.version {
-            crate::wechat::process::WeChatVersion::V3x { exact } => {
+            WeChatVersion::V3x { exact } => {
                 info!("检测到V3x版本: {}", exact);
                 // 验证版本号格式
                 if exact.chars().any(|c| c.is_ascii_digit()) && exact.contains('.') {
@@ -145,7 +146,7 @@ impl KeyVersion {
                     KeyVersion::V3x
                 }
             },
-            crate::wechat::process::WeChatVersion::V4x { exact } => {
+            WeChatVersion::V4x { exact } => {
                 info!("检测到V4.0版本: {}", exact);
                 // 验证版本号格式
                 if exact.chars().any(|c| c.is_ascii_digit()) && exact.contains('.') {
@@ -155,7 +156,27 @@ impl KeyVersion {
                     KeyVersion::V40
                 }
             },
-            crate::wechat::process::WeChatVersion::Unknown => {
+            WeChatVersion::V3xW { exact } => {
+                info!("检测到V3x版本: {}", exact);
+                // 验证版本号格式
+                if exact.chars().any(|c| c.is_ascii_digit()) && exact.contains('.') {
+                    KeyVersion::V3x
+                } else {
+                    warn!("V3x版本号格式无效: {}", exact);
+                    KeyVersion::V3x
+                }
+            },
+            WeChatVersion::V4xW { exact } => {
+                info!("检测到V4.0版本: {}", exact);
+                // 验证版本号格式
+                if exact.chars().any(|c| c.is_ascii_digit()) && exact.contains('.') {
+                    KeyVersion::V40
+                } else {
+                    warn!("V4.0版本号格式无效: {}", exact);
+                    KeyVersion::V40
+                }
+            },            
+            WeChatVersion::Unknown => {
                 // 对于WeChat.exe，如果版本未知，默认推断为V3x
                 // 因为大多数WeChat.exe是V3版本
                 info!("WeChat.exe版本未知，默认推断为V3x版本");

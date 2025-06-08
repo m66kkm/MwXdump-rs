@@ -10,7 +10,7 @@ pub async fn execute(context: &ExecutionContext) -> Result<()> {
     
     // 显示配置信息
     if let Some(data_dir) = context.wechat_data_dir() {
-        tracing::info!("配置的微信数据目录: {:?}", data_dir);
+        tracing::debug!("配置的微信数据目录: {:?}", data_dir);
     }
     
     let detector = create_detector()?;

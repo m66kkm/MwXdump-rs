@@ -131,19 +131,26 @@ impl KeyExtractor for V4KeyExtractor {
         
         // 确认是V4版本
         match &process.version {
-            crate::wechat::process::WeChatVersion::V4x { exact } => {
+            crate::wechat::WeChatVersion::V4x { exact } => {
                 info!("确认V4.0版本: {}", exact);
             },
-            crate::wechat::process::WeChatVersion::V3x { .. } => {
+            crate::wechat::WeChatVersion::V3x { .. } => {
                 return Err(WeChatError::KeyExtractionFailed("进程是V3版本，不应使用V4提取器".to_string()).into());
             },
-            crate::wechat::process::WeChatVersion::Unknown => {
+            crate::wechat::WeChatVersion::V3xW { .. } => {
+                return Err(WeChatError::KeyExtractionFailed("进程是企业微信V3.0版本，不应使用V4提取器".to_string()).into());
+            },
+            crate::wechat::WeChatVersion::V4xW { .. } => {
+                return Err(WeChatError::KeyExtractionFailed("进程是企业微信V4.0版本，不应使用V4提取器".to_string()).into());
+            },            
+            crate::wechat::WeChatVersion::Unknown => {
                 if process_name.contains("wechatappex") {
                     info!("根据进程名WeChatAppEx.exe推断为V4版本");
                 } else {
                     warn!("版本未知，但尝试使用V4算法");
                 }
             }
+
         }
         
         // V4版本特有的检查：WeChatAppEx.exe通常在特定路径

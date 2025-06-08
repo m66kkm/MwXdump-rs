@@ -22,7 +22,8 @@ impl WindowsProcessDetector {
                 "WeChat.exe".to_string(),
                 "Weixin.exe".to_string(),  // 添加微信4.0的主可执行文件名
                 "WeChatApp.exe".to_string(),
-                "WeChatAppEx.exe".to_string(),
+                // "WXWork.exe".to_string(),
+                // "WeChatAppEx.exe".to_string(),
             ],
         })
     }
@@ -99,7 +100,8 @@ impl WindowsProcessDetector {
                 return Ok(WeChatVersion::V3x { exact: version_str });
             }
         }
-
+        
+        tracing::info!("无法从版本信息判断，尝试从路径和文件名判断");
         // 如果无法从版本信息判断，尝试从路径和文件名判断
         let path_str = exe_path.to_string_lossy().to_lowercase();
         let file_name = exe_path.file_name()
@@ -197,6 +199,9 @@ impl WindowsProcessDetector {
             WeChatVersion::V3x { exact } | WeChatVersion::V4x { exact } => {
                 exact.chars().any(|c| c.is_ascii_digit()) && exact.contains('.')
             },
+            WeChatVersion::V3xW { exact } | WeChatVersion::V4xW { exact } => {
+                exact.chars().any(|c| c.is_ascii_digit()) && exact.contains('.')
+            },
             WeChatVersion::Unknown => false,
         }
     }
@@ -218,6 +223,7 @@ impl WindowsProcessDetector {
 
 #[async_trait]
 impl ProcessDetector for WindowsProcessDetector {
+
     async fn detect_processes(&self) -> Result<Vec<ProcessInfo>> {
         let mut processes = Vec::new();
         tracing::debug!("开始检测微信进程...");

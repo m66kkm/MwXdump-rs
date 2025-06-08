@@ -12,8 +12,6 @@ mod mcp;
 mod models;
 mod ui;
 mod wechat;
-mod wechatdb;
-
 use cli::Cli;
 
 #[tokio::main]

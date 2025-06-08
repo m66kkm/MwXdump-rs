@@ -40,13 +40,19 @@ impl KeyExtractor for V3KeyExtractor {
         
         // 确认是V3版本
         match &process.version {
-            crate::wechat::process::WeChatVersion::V3x { exact } => {
+            crate::wechat::WeChatVersion::V3x { exact } => {
                 info!("确认V3版本: {}", exact);
             },
-            crate::wechat::process::WeChatVersion::V4x { .. } => {
+            crate::wechat::WeChatVersion::V4x { .. } => {
                 return Err(WeChatError::KeyExtractionFailed("进程是V4.0版本，不应使用V3提取器".to_string()).into());
             },
-            crate::wechat::process::WeChatVersion::Unknown => {
+            crate::wechat::WeChatVersion::V3xW { .. } => {
+                return Err(WeChatError::KeyExtractionFailed("进程是企业微信V3.0版本，不应使用V3提取器".to_string()).into());
+            },
+            crate::wechat::WeChatVersion::V4xW { .. } => {
+                return Err(WeChatError::KeyExtractionFailed("进程是企业微信V4.0版本，不应使用V3提取器".to_string()).into());
+            },            
+            crate::wechat::WeChatVersion::Unknown => {
                 if process.name.to_lowercase().contains("wechatappex") {
                     return Err(WeChatError::KeyExtractionFailed("WeChatAppEx.exe应使用V4提取器".to_string()).into());
                 }
@@ -95,7 +101,8 @@ impl Default for V3KeyExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wechat::process::{ProcessInfo, WeChatVersion};
+    use crate::wechat::process::ProcessInfo;
+    use crate::wechat::WeChatVersion;
     use std::path::PathBuf;
     use chrono::Utc;
     
