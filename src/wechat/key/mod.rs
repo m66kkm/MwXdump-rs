@@ -1,18 +1,18 @@
 //! 微信密钥提取模块
-//! 
+//!
 //! 该模块负责从微信进程内存中提取数据库解密密钥
 
 use crate::errors::Result;
 use crate::wechat::process::ProcessInfo;
+use crate::wechat::WeChatVersion;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use crate::wechat::WeChatVersion;
 
-#[cfg(target_os = "windows")]
-mod windows;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(target_os = "windows")]
+mod windows;
 
 /// 密钥数据结构
 #[derive(Clone, Serialize, Deserialize)]
@@ -41,13 +41,13 @@ pub enum KeyVersion {
 pub trait KeyExtractor: Send + Sync {
     /// 从指定进程中提取密钥
     async fn extract_key(&self, process: &ProcessInfo) -> Result<WeChatKey>;
-    
+
     /// 在内存数据中搜索密钥
     async fn search_key_in_memory(&self, memory: &[u8]) -> Result<Option<Vec<u8>>>;
-    
+
     /// 验证密钥是否有效
     async fn validate_key(&self, key: &[u8]) -> Result<bool>;
-    
+
     /// 获取支持的密钥版本
     fn supported_version(&self) -> KeyVersion;
 }
@@ -57,7 +57,7 @@ pub trait KeyExtractor: Send + Sync {
 pub trait KeyValidator: Send + Sync {
     /// 验证密钥是否能够解密数据库
     async fn validate(&self, key: &[u8]) -> bool;
-    
+
     /// 设置用于验证的数据库路径
     fn set_database_path(&mut self, path: &str);
 }
@@ -84,24 +84,28 @@ impl WeChatKey {
             version,
         }
     }
-    
+
     /// 获取密钥的十六进制表示
     pub fn to_hex(&self) -> String {
         hex::encode(&self.key_data)
     }
-    
+
     /// 从十六进制字符串创建密钥
     pub fn from_hex(hex_str: &str, source_pid: u32, version: KeyVersion) -> Result<Self> {
-        let key_data = hex::decode(hex_str)
-            .map_err(|_| crate::errors::WeChatError::KeyExtractionFailed("无效的十六进制密钥".to_string()))?;
-        
+        let key_data = hex::decode(hex_str).map_err(|_| {
+            crate::errors::WeChatError::KeyExtractionFailed("无效的十六进制密钥".to_string())
+        })?;
+
         if key_data.len() != 32 {
-            return Err(crate::errors::WeChatError::KeyExtractionFailed("密钥长度必须为32字节".to_string()).into());
+            return Err(crate::errors::WeChatError::KeyExtractionFailed(
+                "密钥长度必须为32字节".to_string(),
+            )
+            .into());
         }
-        
+
         Ok(Self::new(key_data, source_pid, version))
     }
-    
+
     /// 检查密钥是否有效（非全零）
     pub fn is_valid(&self) -> bool {
         !self.key_data.iter().all(|&b| b == 0) && self.key_data.len() == 32
@@ -121,8 +125,13 @@ impl fmt::Debug for WeChatKey {
 
 impl fmt::Display for WeChatKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "WeChatKey(版本: {:?}, PID: {}, 时间: {})", 
-               self.version, self.source_pid, self.extracted_at.format("%Y-%m-%d %H:%M:%S"))
+        write!(
+            f,
+            "WeChatKey(版本: {:?}, PID: {}, 时间: {})",
+            self.version,
+            self.source_pid,
+            self.extracted_at.format("%Y-%m-%d %H:%M:%S")
+        )
     }
 }
 
@@ -130,11 +139,16 @@ impl KeyVersion {
     /// 从进程信息推断密钥版本
     pub fn from_process(process: &ProcessInfo) -> Self {
         use tracing::{info, warn};
-        
-        info!("开始为进程 {} (PID: {}) 推断密钥版本", process.name, process.pid);
-        info!("分析进程版本: 进程名={}, 版本={:?}, 路径={:?}",
-               process.name, process.version, process.path);
-        
+
+        info!(
+            "开始为进程 {} (PID: {}) 推断密钥版本",
+            process.name, process.pid
+        );
+        info!(
+            "分析进程版本: 进程名={}, 版本={:?}, 路径={:?}",
+            process.name, process.version, process.path
+        );
+
         match &process.version {
             WeChatVersion::V3x { exact } => {
                 info!("检测到V3x版本: {}", exact);
@@ -145,7 +159,7 @@ impl KeyVersion {
                     warn!("V3x版本号格式无效: {}", exact);
                     KeyVersion::V3x
                 }
-            },
+            }
             WeChatVersion::V4x { exact } => {
                 info!("检测到V4.0版本: {}", exact);
                 // 验证版本号格式
@@ -155,7 +169,7 @@ impl KeyVersion {
                     warn!("V4.0版本号格式无效: {}", exact);
                     KeyVersion::V40
                 }
-            },
+            }
             WeChatVersion::V3xW { exact } => {
                 info!("检测到V3x版本: {}", exact);
                 // 验证版本号格式
@@ -165,7 +179,7 @@ impl KeyVersion {
                     warn!("V3x版本号格式无效: {}", exact);
                     KeyVersion::V3x
                 }
-            },
+            }
             WeChatVersion::V4xW { exact } => {
                 info!("检测到V4.0版本: {}", exact);
                 // 验证版本号格式
@@ -175,7 +189,7 @@ impl KeyVersion {
                     warn!("V4.0版本号格式无效: {}", exact);
                     KeyVersion::V40
                 }
-            },            
+            }
             WeChatVersion::Unknown => {
                 // 对于WeChat.exe，如果版本未知，默认推断为V3x
                 // 因为大多数WeChat.exe是V3版本
@@ -184,7 +198,7 @@ impl KeyVersion {
             }
         }
     }
-    
+
     /// 获取版本的字符串表示
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -202,30 +216,30 @@ mod tests {
     fn test_wechat_key_creation() {
         let key_data = vec![0x01; 32];
         let key = WeChatKey::new(key_data.clone(), 1234, KeyVersion::V3x);
-        
+
         assert_eq!(key.key_data, key_data);
         assert_eq!(key.source_pid, 1234);
         assert_eq!(key.version, KeyVersion::V3x);
         assert!(key.is_valid());
     }
-    
+
     #[test]
     fn test_key_hex_conversion() {
         let hex_str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         let key = WeChatKey::from_hex(hex_str, 1234, KeyVersion::V3x).unwrap();
-        
+
         assert_eq!(key.to_hex(), hex_str);
         assert!(key.is_valid());
     }
-    
+
     #[test]
     fn test_invalid_key() {
         let key_data = vec![0x00; 32]; // 全零密钥
         let key = WeChatKey::new(key_data, 1234, KeyVersion::V3x);
-        
+
         assert!(!key.is_valid());
     }
-    
+
     #[test]
     fn test_key_version_from_str() {
         assert_eq!(KeyVersion::V3x.as_str(), "3.x");

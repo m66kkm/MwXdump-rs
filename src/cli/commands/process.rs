@@ -18,30 +18,30 @@ pub async fn execute(context: &ExecutionContext) -> Result<()> {
     match detector.detect_processes().await {
         Ok(processes) => {
             if processes.is_empty() {
-                println!("✅ 进程检测功能正常，但未发现运行中的微信进程");
+                eprintln!("✅ 进程检测功能正常，但未发现运行中的微信进程");
             } else {
-                println!("✅ 检测到 {} 个微信进程:", processes.len());
+                eprintln!("✅ 检测到 {} 个微信进程:", processes.len());
                 for (i, process) in processes.iter().enumerate() {
-                    println!("  {}. 进程名: {}", i + 1, process.name);
-                    println!("     PID: {}", process.pid);
-                    println!("     路径: {:?}", process.path);
-                    println!("     版本: {:?}", process.version);
+                    eprintln!("  {}. 进程名: {}", i + 1, process.name);
+                    eprintln!("     PID: {}", process.pid);
+                    eprintln!("     路径: {:?}", process.path);
+                    eprintln!("     版本: {:?}", process.version);
                     if let Some(data_dir) = &process.data_dir {
-                        println!("     数据目录: {:?}", data_dir);
+                        eprintln!("     数据目录: {:?}", data_dir);
                     } else {
-                        println!("     数据目录: 未找到");
+                        eprintln!("     数据目录: 未找到");
                     }
-                    println!("     检测时间: {}", process.detected_at.format("%Y-%m-%d %H:%M:%S"));
-                    println!();
+                    eprintln!("     检测时间: {}", process.detected_at.format("%Y-%m-%d %H:%M:%S"));
+                    eprintln!();
                 }
             }
         }
         Err(e) => {
-            println!("❌ 进程检测失败: {}", e);
+            eprintln!("❌ 进程检测失败: {}", e);
             return Err(e);
         }
     }
     
-    println!("进程检测测试完成！");
+    eprintln!("进程检测测试完成！");
     Ok(())
 }

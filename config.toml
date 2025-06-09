@@ -25,5 +25,5 @@ supported_versions = ["3.x", "4.0"]
 
 [logging]
 level = "debug"
-console = true
+console = false
 file = "logs/mwxdump.log"
