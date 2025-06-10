@@ -2,7 +2,7 @@
 
 use crate::errors::{Result, WeChatError};
 use crate::wechat::key::{KeyExtractor, KeyVersion, WeChatKey};
-use crate::wechat::process::ProcessInfo;
+use crate::wechat::process::WechatProcessInfo;
 use async_trait::async_trait;
 use std::process::Command;
 use tokio::task;
@@ -119,7 +119,7 @@ impl V4KeyExtractor {
 
 #[async_trait]
 impl KeyExtractor for V4KeyExtractor {
-    async fn extract_key(&self, process: &ProcessInfo) -> Result<WeChatKey> {
+    async fn extract_key(&self, process: &WechatProcessInfo) -> Result<WeChatKey> {
         info!("开始提取V4密钥，进程: {} (PID: {})", process.name, process.pid);
         info!("进程版本信息: {:?}", process.version);
         

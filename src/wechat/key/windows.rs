@@ -2,7 +2,7 @@
 
 use super::{KeyExtractor, KeyValidator, KeyVersion, WeChatKey};
 use crate::errors::{Result, WeChatError};
-use crate::wechat::process::ProcessInfo;
+use crate::wechat::process::WechatProcessInfo;
 use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -44,7 +44,7 @@ impl WindowsKeyExtractor {
 
 #[async_trait]
 impl KeyExtractor for WindowsKeyExtractor {
-    async fn extract_key(&self, process: &ProcessInfo) -> Result<WeChatKey> {
+    async fn extract_key(&self, process: &WechatProcessInfo) -> Result<WeChatKey> {
         info!("开始从进程 {} (PID: {}) 提取密钥", process.name, process.pid);
         
         // 检查进程是否仍在运行

@@ -3,7 +3,7 @@
 //! 该模块负责从微信进程内存中提取数据库解密密钥
 
 use crate::errors::Result;
-use crate::wechat::process::ProcessInfo;
+use crate::wechat::process::WechatProcessInfo;
 use crate::wechat::WeChatVersion;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -40,7 +40,7 @@ pub enum KeyVersion {
 #[async_trait]
 pub trait KeyExtractor: Send + Sync {
     /// 从指定进程中提取密钥
-    async fn extract_key(&self, process: &ProcessInfo) -> Result<WeChatKey>;
+    async fn extract_key(&self, process: &WechatProcessInfo) -> Result<WeChatKey>;
 
     /// 在内存数据中搜索密钥
     async fn search_key_in_memory(&self, memory: &[u8]) -> Result<Option<Vec<u8>>>;
@@ -137,7 +137,7 @@ impl fmt::Display for WeChatKey {
 
 impl KeyVersion {
     /// 从进程信息推断密钥版本
-    pub fn from_process(process: &ProcessInfo) -> Self {
+    pub fn from_process(process: &WechatProcessInfo) -> Self {
         use tracing::{info, warn};
 
         info!(

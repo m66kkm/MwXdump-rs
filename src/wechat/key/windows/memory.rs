@@ -7,7 +7,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
 use tracing::{debug, info, warn};
 use crate::errors::{Result, WeChatError};
-use crate::wechat::process::ProcessInfo;
+use crate::wechat::process::WechatProcessInfo;
 use crate::wechat::key::{WeChatKey, KeyVersion};
 use super::winapi::{WindowsApi, MemoryInfo};
 
@@ -44,7 +44,7 @@ impl MemorySearcher {
     }
     
     /// 在进程中搜索V3密钥
-    pub async fn search_v3_key(&self, process: &ProcessInfo) -> Result<WeChatKey> {
+    pub async fn search_v3_key(&self, process: &WechatProcessInfo) -> Result<WeChatKey> {
         info!("开始在进程 {} (PID: {}) 中搜索V3密钥", process.name, process.pid);
         
         // 打开进程

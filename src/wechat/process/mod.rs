@@ -14,7 +14,7 @@ mod macos;
 
 /// 进程信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProcessInfo {
+pub struct WechatProcessInfo {
     /// 进程ID
     pub pid: u32,
     /// 进程名称
@@ -33,16 +33,16 @@ pub struct ProcessInfo {
 #[async_trait]
 pub trait ProcessDetector: Send + Sync {
     /// 检测所有微信进程
-    async fn detect_processes(&self) -> Result<Vec<ProcessInfo>>;
+    async fn detect_processes(&self) -> Result<Vec<WechatProcessInfo>>;
     
     /// 获取指定PID的进程信息
-    async fn get_process_info(&self, pid: u32) -> Result<Option<ProcessInfo>>;
+    async fn get_process_info(&self, pid: u32) -> Result<Option<WechatProcessInfo>>;
     
     /// 检测微信版本
     async fn detect_version(&self, exe_path: &PathBuf) -> Result<WeChatVersion>;
     
     /// 定位数据目录
-    async fn locate_data_dir(&self, process: &ProcessInfo) -> Result<Option<PathBuf>>;
+    async fn locate_data_dir(&self, process: &WechatProcessInfo) -> Result<Option<PathBuf>>;
 }
 
 /// 平台特定的进程检测器
@@ -57,20 +57,12 @@ pub fn create_detector() -> Result<PlatformDetector> {
     PlatformDetector::new()
 }
 
-impl ProcessInfo {
+impl WechatProcessInfo {
     /// 检查进程是否仍在运行
     pub async fn is_running(&self) -> bool {
-        // 简单的进程存在性检查
         #[cfg(target_os = "windows")]
         {
-            use std::process::Command;
-            if let Ok(output) = Command::new("tasklist")
-                .args(&["/fi", &format!("PID eq {}", self.pid), "/fo", "csv", "/nh"])
-                .output()
-            {
-                let output_str = String::from_utf8_lossy(&output.stdout);
-                return !output_str.trim().is_empty() && output_str.contains(&self.pid.to_string());
-            }
+            return crate::utils::win_process::is_process_running(&self.pid);
         }
         
         #[cfg(target_os = "macos")]
@@ -83,7 +75,6 @@ impl ProcessInfo {
                 return output.status.success();
             }
         }
-        
         false
     }
 }

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use windows_result::BOOL;
+use windows::Win32::Foundation::STILL_ACTIVE;
 use super::ProcessInfo; // 假设 ProcessInfo 在 super 模块中定义
 use windows::{
     core::{HSTRING, PCWSTR},
@@ -14,7 +15,7 @@ use windows::{
         },
         System::{
             ProcessStatus::GetModuleFileNameExW,
-            Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
+            Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ, GetExitCodeProcess}
         },
     },
 };
@@ -67,7 +68,7 @@ pub fn list_processes(filter: &[&str]) -> Result<Vec<ProcessInfo>> {
             };
 
             if filter.iter().any(|name| name.eq_ignore_ascii_case(&process_name)) {
-                tracing::info!("检测到进程: pid: {}, name: {}", process_entry.th32ParentProcessID, process_name);
+                tracing::info!("检测到进程: pid: {}, name: {}", process_entry.th32ProcessID, process_name);
                 let process_exe_path = get_process_exe_path(process_entry.th32ProcessID)?;
                 let file_version_info = get_file_version_info(&process_exe_path)?;
                 processes.push(ProcessInfo {
@@ -124,7 +125,7 @@ pub fn get_process_exe_path(pid: u32) -> Result<String> {
 
 
  pub fn get_file_version_info(exe_path: &str) -> Result<String> {
-    tracing::info!("--- 开始获取文件版本 for: [{}] ---", exe_path);
+    tracing::debug!("--- 开始获取文件版本 for: [{}] ---", exe_path);
 
     let wide_path = HSTRING::from(exe_path);
 
@@ -148,7 +149,7 @@ pub fn get_process_exe_path(pid: u32) -> Result<String> {
             err
         ));
     }
-    tracing::info!("步骤 1 成功: GetFileVersionInfoSizeW 返回大小: {}", version_info_size);
+    tracing::debug!("步骤 1 成功: GetFileVersionInfoSizeW 返回大小: {}", version_info_size);
 
     // 步骤 2: 获取版本信息数据
     let mut version_info_buffer: Vec<u8> = vec![0; version_info_size as usize];
@@ -165,7 +166,7 @@ pub fn get_process_exe_path(pid: u32) -> Result<String> {
         tracing::error!("步骤 2 失败: GetFileVersionInfoW 返回错误. Win32 Error: {}", e);
         return Err(e.into());
     }
-    tracing::info!("步骤 2 成功: GetFileVersionInfoW 执行完毕.");
+    tracing::debug!("步骤 2 成功: GetFileVersionInfoW 执行完毕.");
     // 可以选择性地打印缓冲区的一小部分来检查数据是否被填充
     // tracing::debug!("版本信息缓冲区 (前16字节): {:?}", &version_info_buffer.get(..16));
 
@@ -195,7 +196,7 @@ pub fn get_process_exe_path(pid: u32) -> Result<String> {
             err
         ));
     }
-    tracing::info!(
+    tracing::debug!(
         "步骤 3 成功: VerQueryValueW 返回 TRUE. 指针是否为null: {}, 获取到的长度: {}",
         fixed_file_info_ptr.is_null(),
         len
@@ -217,11 +218,12 @@ pub fn get_process_exe_path(pid: u32) -> Result<String> {
              exe_path
          ));
     }
-    
+    tracing::debug!("步骤 4 成功: VerQueryValueW 执行完毕.");
+
     // 步骤 5: 转换指针并解析数据
     // 我们现在可以安全地将 *mut c_void 转换为 *mut VS_FIXEDFILEINFO
     let fixed_file_info = unsafe { &*(fixed_file_info_ptr as *const VS_FIXEDFILEINFO) };
-    tracing::info!("步骤 5: 指针转换成功. 准备检查签名.");
+    tracing::debug!("步骤 5: 指针转换成功. 准备检查签名.");
 
     if fixed_file_info.dwSignature != 0xFEEF04BD {
         tracing::error!(
@@ -233,7 +235,7 @@ pub fn get_process_exe_path(pid: u32) -> Result<String> {
             exe_path
         ));
     }
-    tracing::info!("步骤 5 成功: 签名有效 (0xFEEF04BD).");
+    tracing::debug!("步骤 5 成功: 签名有效 (0xFEEF04BD).");
 
     let major = (fixed_file_info.dwFileVersionMS >> 16) & 0xffff;
     let minor = fixed_file_info.dwFileVersionMS & 0xffff;
@@ -271,6 +273,48 @@ pub fn get_process_architecture(pid: u32) -> Result<usize> {
                 "Unknown or unsupported processor architecture: {:?}",
                 arch_val
             )),
+        }
+    }
+}
+
+
+/// 检查指定 PID 的进程是否仍在运行。
+/// 本函数使用 `windows` crate 实现。
+///
+/// # Arguments
+/// * `pid` - 要检查的进程的 ID。
+///
+/// # Returns
+/// 如果进程正在运行，返回 `true`；否则（进程不存在、无权限、已退出）返回 `false`。
+pub fn is_process_running(pid: &u32) -> bool {
+    //检查 pid 是否为 0，因为 0 通常表示系统进程或无效 PID。
+    // 如果 pid 为 0，直接返回 false，因为无效的 PID 不可能对应一个正在运行的进程。
+    // 这里的 pid 是引用类型，所以需要解引用才能获取实际的值。  
+    if *pid == 0 {
+        return false;
+    }
+    
+    // unsafe 块是必需的，因为我们正在调用 Windows API (FFI)
+    unsafe {
+        // 1. 调用 `windows` crate 的 OpenProcess 函数，尝试获取进程句柄。
+        //    该函数返回一个 Result，我们需要处理它。
+        if let Ok(process_handle) = OpenProcess(PROCESS_QUERY_INFORMATION, false, *pid) {
+            
+            // 2. 声明一个 u32 类型的变量来接收退出码。
+            let mut exit_code: u32 = 0;
+
+            // 3. 调用 `windows` crate 的 GetExitCodeProcess 函数。
+            let result = GetExitCodeProcess(process_handle, &mut exit_code);
+
+            // 4. 调用 `windows` crate 的 CloseHandle 函数，关闭句柄以释放资源。
+            CloseHandle(process_handle);
+
+            // 5. 将 u32 退出码与 `windows` crate 提供的 STILL_ACTIVE 常量直接比较。
+            result.is_ok() && exit_code == STILL_ACTIVE.0 as u32
+        } else {
+            // 如果 OpenProcess 返回 Err，意味着进程不存在或我们没有权限访问。
+            // 在这种情况下，我们认为它“没有运行”。
+            false
         }
     }
 }

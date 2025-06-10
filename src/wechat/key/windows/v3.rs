@@ -2,7 +2,7 @@
 
 use crate::errors::{Result, WeChatError};
 use crate::wechat::key::{KeyExtractor, KeyVersion, WeChatKey};
-use crate::wechat::process::ProcessInfo;
+use crate::wechat::process::WechatProcessInfo;
 use super::memory::{MemorySearcher, SearchConfig};
 use async_trait::async_trait;
 use tracing::{info, warn};
@@ -29,7 +29,7 @@ impl V3KeyExtractor {
 
 #[async_trait]
 impl KeyExtractor for V3KeyExtractor {
-    async fn extract_key(&self, process: &ProcessInfo) -> Result<WeChatKey> {
+    async fn extract_key(&self, process: &WechatProcessInfo) -> Result<WeChatKey> {
         info!("开始提取V3密钥，进程: {} (PID: {})", process.name, process.pid);
         info!("进程版本信息: {:?}", process.version);
         
@@ -101,13 +101,13 @@ impl Default for V3KeyExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wechat::process::ProcessInfo;
+    use crate::wechat::process::WechatProcessInfo;
     use crate::wechat::WeChatVersion;
     use std::path::PathBuf;
     use chrono::Utc;
     
-    fn create_test_process() -> ProcessInfo {
-        ProcessInfo {
+    fn create_test_process() -> WechatProcessInfo {
+        WechatProcessInfo {
             pid: 1234,
             name: "WeChat.exe".to_string(),
             path: PathBuf::from("C:\\Program Files\\Tencent\\WeChat\\WeChat.exe"),
