@@ -46,12 +46,6 @@ impl KeyExtractor for V3KeyExtractor {
             crate::wechat::WeChatVersion::V4x { .. } => {
                 return Err(WeChatError::KeyExtractionFailed("进程是V4.0版本，不应使用V3提取器".to_string()).into());
             },
-            crate::wechat::WeChatVersion::V3xW { .. } => {
-                return Err(WeChatError::KeyExtractionFailed("进程是企业微信V3.0版本，不应使用V3提取器".to_string()).into());
-            },
-            crate::wechat::WeChatVersion::V4xW { .. } => {
-                return Err(WeChatError::KeyExtractionFailed("进程是企业微信V4.0版本，不应使用V3提取器".to_string()).into());
-            },            
             crate::wechat::WeChatVersion::Unknown => {
                 if process.name.to_lowercase().contains("wechatappex") {
                     return Err(WeChatError::KeyExtractionFailed("WeChatAppEx.exe应使用V4提取器".to_string()).into());
@@ -143,7 +137,7 @@ mod tests {
     async fn test_extract_key_v4_process() {
         let extractor = V3KeyExtractor::new().unwrap();
         let mut process = create_test_process();
-        process.version = WeChatVersion::V40 { exact: "4.0.1".to_string() };
+        process.version = WeChatVersion::V4x { exact: "4.0.1".to_string() };
         
         let result = extractor.extract_key(&process).await;
         assert!(result.is_err());

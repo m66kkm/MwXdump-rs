@@ -170,26 +170,6 @@ impl KeyVersion {
                     KeyVersion::V40
                 }
             }
-            WeChatVersion::V3xW { exact } => {
-                info!("检测到V3x版本: {}", exact);
-                // 验证版本号格式
-                if exact.chars().any(|c| c.is_ascii_digit()) && exact.contains('.') {
-                    KeyVersion::V3x
-                } else {
-                    warn!("V3x版本号格式无效: {}", exact);
-                    KeyVersion::V3x
-                }
-            }
-            WeChatVersion::V4xW { exact } => {
-                info!("检测到V4.0版本: {}", exact);
-                // 验证版本号格式
-                if exact.chars().any(|c| c.is_ascii_digit()) && exact.contains('.') {
-                    KeyVersion::V40
-                } else {
-                    warn!("V4.0版本号格式无效: {}", exact);
-                    KeyVersion::V40
-                }
-            }
             WeChatVersion::Unknown => {
                 // 对于WeChat.exe，如果版本未知，默认推断为V3x
                 // 因为大多数WeChat.exe是V3版本

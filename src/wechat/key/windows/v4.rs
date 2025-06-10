@@ -137,12 +137,6 @@ impl KeyExtractor for V4KeyExtractor {
             crate::wechat::WeChatVersion::V3x { .. } => {
                 return Err(WeChatError::KeyExtractionFailed("进程是V3版本，不应使用V4提取器".to_string()).into());
             },
-            crate::wechat::WeChatVersion::V3xW { .. } => {
-                return Err(WeChatError::KeyExtractionFailed("进程是企业微信V3.0版本，不应使用V4提取器".to_string()).into());
-            },
-            crate::wechat::WeChatVersion::V4xW { .. } => {
-                return Err(WeChatError::KeyExtractionFailed("进程是企业微信V4.0版本，不应使用V4提取器".to_string()).into());
-            },            
             crate::wechat::WeChatVersion::Unknown => {
                 if process_name.contains("wechatappex") {
                     info!("根据进程名WeChatAppEx.exe推断为V4版本");

@@ -32,6 +32,12 @@ pub enum MwxDumpError {
     
     #[error("序列化错误: {0}")]
     Serialization(#[from] serde_json::Error),
+
+    #[error("进程路径缺失")]
+    MissingPath,
+    
+    #[error("无效或无法解析的版本字符串: '{0}'")]
+    InvalidVersion(String),
     
     #[error("其他错误: {0}")]
     Other(#[from] anyhow::Error),

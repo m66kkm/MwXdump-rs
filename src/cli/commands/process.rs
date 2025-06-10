@@ -2,8 +2,7 @@
 
 use crate::cli::context::ExecutionContext;
 use crate::errors::Result;
-use crate::wechat::process::{create_detector, ProcessDetector};
-
+use crate::wechat::process::{ProcessDetector, create_detector};
 /// 执行进程检测测试
 pub async fn execute(context: &ExecutionContext) -> Result<()> {
     tracing::info!("开始测试微信进程检测功能...");
@@ -13,8 +12,9 @@ pub async fn execute(context: &ExecutionContext) -> Result<()> {
         tracing::debug!("配置的微信数据目录: {:?}", data_dir);
     }
     
-    let detector = create_detector()?;
-    
+    let detector = create_detector();
+
+
     match detector.detect_processes().await {
         Ok(processes) => {
             if processes.is_empty() {

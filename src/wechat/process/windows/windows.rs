@@ -10,24 +10,6 @@ use std::process::Command;
 use tracing::{debug, info, warn};
 use once_cell::sync::Lazy;
 
-const WECHAT_REG_KEY_PATH: &str = "Software\\Tencent\\WeChat";
-const WECHAT_FILES_VALUE_NAME: &str = "FileSavePath";
-static WECHAT_PROCESS_NAMES: Lazy<Vec<&'static str>> = Lazy::new(|| {
-    vec![
-        "WeChat.exe",
-        "Weixin.exe", // 微信4.0的主可执行文件名
-        "WeChatApp.exe",
-        // "WeChatAppEx.exe", // 微信增强版
-    ]
-});
-
-const WXWork_REG_KEY_PATH: &str = "Software\\Tencent\\WeChat";
-const WXWork_FILES_VALUE_NAME: &str = "FileSavePath";
-static WXWork_PROCESS_NAMES: Lazy<Vec<&'static str>> = Lazy::new(|| {
-    vec![
-        "WXWork.exe",
-    ]
-});
 
 pub struct WindowsProcessDetector {
     /// 微信进程名称列表
@@ -35,29 +17,33 @@ pub struct WindowsProcessDetector {
 }
 
 impl WindowsProcessDetector {
-    /// 创建新的Windows进程检测器
-    pub fn new() -> Result<Self> {
+
+    pub fn new (&self) -> Result<Self>{
+        &self.create_wechat_detector()
+    }
+
+    pub fn create_wxwork_detector() -> Result<Self> {
         Ok(Self {
-            wechat_process_names: vec![
-                "WeChat.exe".to_string(),
-                "Weixin.exe".to_string(), // 添加微信4.0的主可执行文件名
-                "WeChatApp.exe".to_string(),
-                // "WXWork.exe".to_string(),
-                // "WeChatAppEx.exe".to_string(),
-            ],
+            // 从静态变量转换和创建 Vec<String>
+            wechat_process_names: WXWORK_PROCESS_NAMES
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         })
     }
 
-    pub fn new_wxwork() -> Result<Self> {
+    pub fn create_wechat_detector() -> Result<Self> {
         Ok(Self {
-            wechat_process_names: WXWork_PROCESS_NAMES.iter().map(|s| s.to_string()).collect(),
+            // 从静态变量转换和创建 Vec<String>
+            wechat_process_names: WECHAT_PROCESS_NAMES
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         })
     }
 
-    pub fn new_wechat() -> Result<Self> {
-        Ok(Self {
-            wechat_process_names: WECHAT_PROCESS_NAMES.iter().map(|s| s.to_string()).collect(),
-        })
+    fn get_process_list(&self) -> Result<Vec<ProcessInfo>> {
+
     }
 
     /// 使用tasklist命令获取进程列表，同时获取路径信息
@@ -93,122 +79,7 @@ impl WindowsProcessDetector {
                 }
             }
         }
-
         Ok(processes)
-    }
-
-    /// 使用wmic命令获取进程的可执行文件路径
-    async fn get_process_path(&self, pid: u32) -> Result<PathBuf> {
-        if let Ok(reg_path) = crate::utils::win_registry::get_string_from_registry(
-            windows::Win32::System::Registry::HKEY_CURRENT_USER,
-            WECHAT_REG_KEY_PATH,
-            WECHAT_FILES_VALUE_NAME,
-        ) {
-            tracing::info!("从注册表获取到路径: {}", reg_path);
-        }
-
-        let output = Command::new("wmic")
-            .args(&[
-                "process",
-                "where",
-                &format!("ProcessId={}", pid),
-                "get",
-                "ExecutablePath",
-                "/format:list",
-            ])
-            .output()
-            .map_err(|_| WeChatError::ProcessNotFound)?;
-
-        if !output.status.success() {
-            return Err(WeChatError::ProcessNotFound.into());
-        }
-
-        let output_str = String::from_utf8_lossy(&output.stdout);
-        debug!("wmic输出: {}", output_str);
-
-        for line in output_str.lines() {
-            let line = line.trim();
-            if line.starts_with("ExecutablePath=") {
-                let path = line.strip_prefix("ExecutablePath=").unwrap_or("").trim();
-                if !path.is_empty() {
-                    debug!("解析到路径: {}", path);
-                    return Ok(PathBuf::from(path));
-                }
-            }
-        }
-
-        warn!("未能解析进程路径，PID: {}", pid);
-        Err(WeChatError::ProcessNotFound.into())
-    }
-
-    /// 从可执行文件路径检测版本
-    async fn detect_version_from_path(&self, exe_path: &PathBuf) -> Result<WeChatVersion> {
-        // 首先尝试使用PowerShell获取文件版本信息
-        if let Ok(version_str) = self.get_file_version_powershell(exe_path).await {
-            debug!("检测到版本信息: {}", version_str);
-
-            if version_str.starts_with("4.") {
-                return Ok(WeChatVersion::V4x { exact: version_str });
-            } else if version_str.starts_with("3.") {
-                return Ok(WeChatVersion::V3x { exact: version_str });
-            }
-        }
-
-        tracing::info!("无法从版本信息判断，尝试从路径和文件名判断");
-        // 如果无法从版本信息判断，尝试从路径和文件名判断
-        let path_str = exe_path.to_string_lossy().to_lowercase();
-        let file_name = exe_path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("")
-            .to_lowercase();
-
-        if file_name == "wechat.exe" {
-            // 对于WeChat.exe，尝试从PowerShell获取的版本信息中提取
-            // 如果没有获取到具体版本，返回Unknown让其他方式处理
-            Ok(WeChatVersion::Unknown)
-        } else {
-            // 其他文件名都返回Unknown
-            Ok(WeChatVersion::Unknown)
-        }
-    }
-
-    /// 使用PowerShell获取文件版本信息
-    async fn get_file_version_powershell(&self, exe_path: &PathBuf) -> Result<String> {
-        let path_str = exe_path.to_string_lossy();
-        let script = format!(
-            "(Get-ItemProperty '{}').VersionInfo.FileVersion",
-            path_str.replace("'", "''")
-        );
-
-        let output = Command::new("powershell")
-            .args(&["-Command", &script])
-            .output()
-            .map_err(|_| WeChatError::ProcessNotFound)?;
-
-        if output.status.success() {
-            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            debug!("PowerShell返回版本: '{}'", version);
-
-            // 验证版本号格式：必须包含数字和点，且不能是占位符
-            if !version.is_empty()
-                && version != "null"
-                && version.chars().any(|c| c.is_ascii_digit())
-                && version.contains('.')
-                && !version.contains('x')
-                && !version.to_lowercase().contains("unknown")
-            {
-                debug!("有效版本号: {}", version);
-                return Ok(version);
-            } else {
-                debug!("无效版本号格式: {}", version);
-            }
-        } else {
-            let error_output = String::from_utf8_lossy(&output.stderr);
-            debug!("PowerShell执行失败: {}", error_output);
-        }
-
-        Err(WeChatError::ProcessNotFound.into())
     }
 
     /// 定位微信数据目录
@@ -253,9 +124,6 @@ impl WindowsProcessDetector {
             WeChatVersion::V3x { exact } | WeChatVersion::V4x { exact } => {
                 exact.chars().any(|c| c.is_ascii_digit()) && exact.contains('.')
             }
-            WeChatVersion::V3xW { exact } | WeChatVersion::V4xW { exact } => {
-                exact.chars().any(|c| c.is_ascii_digit()) && exact.contains('.')
-            }
             WeChatVersion::Unknown => false,
         }
     }
@@ -282,7 +150,6 @@ impl ProcessDetector for WindowsProcessDetector {
         let mut processes = Vec::new();
         tracing::debug!("开始检测微信进程...");
         let process_list = self.get_process_list().await?;
-
 
         tracing::info!("检测到 {} 个微信相关进程", process_list.len());
         

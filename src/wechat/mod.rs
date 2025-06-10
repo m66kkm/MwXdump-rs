@@ -3,28 +3,11 @@
 pub mod decrypt;
 pub mod key;
 pub mod process;
+pub mod wechat_version;
 
-use crate::errors::Result;
+pub use wechat_version::WeChatVersion;
 
-use serde::{Deserialize, Serialize};
-
-/// 微信版本信息
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum WeChatVersion {
-    /// 3.x版本
-    V3x { exact: String },
-    /// 4.0版本
-    V4x { exact: String },
-    /// 企业微信 3.x版本
-    V3xW { exact: String},
-    /// 企业微信 4.x版本
-    V4xW { exact: String},
-    /// 未知版本
-    Unknown,
-}
-
-
-
+use crate::errors::{Result};
 /// 微信服务
 pub struct WeChatService {
     // 占位符实现
