@@ -1,6 +1,6 @@
 use windows_result::BOOL;
 use crate::errors::Result;
-use std::ffi::c_void;
+use std::{ffi::c_void, io::Read};
 use windows::{
     core::PCWSTR,
     Win32::{
@@ -147,6 +147,7 @@ pub fn search_memory_for_pattern(
                 if read_result.is_ok() && bytes_read > 0 {
                     let actual_buffer = &buffer[..bytes_read];
                     for (i, window) in actual_buffer.windows(pattern.len()).enumerate() {
+                        print!("get string from memory {}",  std::str::from_utf8(window)?);
                         if window == pattern {
                             found_addresses.push(address_to_scan + i);
                             if found_addresses.len() >= max_occurrences {

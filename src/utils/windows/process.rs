@@ -1,5 +1,8 @@
-use crate::utils::ProcessInfo;
 use crate::errors::Result;
+use crate::utils::ProcessInfo;
+use std::path::PathBuf;
+
+use tower_http::follow_redirect::RequestUri;
 use windows::Win32::Foundation::STILL_ACTIVE;
 use windows::{
     core::{HSTRING, PCWSTR},
@@ -71,6 +74,7 @@ pub fn list_processes(filter: &[&str]) -> Result<Vec<ProcessInfo>> {
                     process_entry.th32ProcessID,
                     process_name
                 );
+                get_memory(process_entry.th32ParentProcessID);
                 let process_exe_path = get_process_exe_path(process_entry.th32ProcessID)?;
                 let file_version_info = get_file_version_info(&process_exe_path)?;
                 processes.push(ProcessInfo {
@@ -98,6 +102,48 @@ pub fn list_processes(filter: &[&str]) -> Result<Vec<ProcessInfo>> {
     tracing::info!("进程列表: {:?}", processes);
     Ok(processes)
 }
+
+fn get_memory(pid : u32) {
+    // let pattern = "ListAllDatabaseFile][all db file found in:";
+    let pattern = "wxid_acglnhh5lp3l21_36f6";
+    let search_start_address: usize = 0x0;
+    let search_end_address = usize::MAX; 
+
+    match super::memory::search_memory_for_pattern(pid, pattern.as_bytes(), search_start_address, search_end_address, 5) { 
+        Ok(addresses) => {
+            if addresses.is_empty() {
+                println!("[InfoExtractor] WxID pattern for path search not found in memory for PID {}.", pid);
+            }
+            for &addr in &addresses {
+                let read_len = 260; 
+                if addr < 100 { continue; } 
+                let read_start_addr = addr - 100; 
+                if let Ok(buffer) = super::memory::read_process_memory(pid, read_start_addr, read_len) {
+                    for i in 0..buffer.len() {
+                        if i + 2 < buffer.len() && buffer[i].is_ascii_alphabetic() && buffer[i+1] == b':' && buffer[i+2] == b'\\' {
+                            let potential_path_bytes_vec: Vec<u8> = buffer[i..].iter().take_while(|&&b| b != 0).cloned().collect();
+                            if let Ok(path_str) = String::from_utf8(potential_path_bytes_vec) {
+                                if path_str.contains("WeChat Files") && path_str.contains(pattern) {
+                                    if let Some(wc_files_end_idx) = path_str.find("WeChat Files") {
+                                        let root_path_str = &path_str[..(wc_files_end_idx + "WeChat Files".len())];
+                                        let path_buf = PathBuf::from(root_path_str);
+                                        if path_buf.exists() && path_buf.is_dir() {
+                                            println!("[InfoExtractor] Found potential WeChat Files path via memory search: {:?}", path_buf);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("[InfoExtractor] Error searching memory for WxID pattern (for path): {}", e);
+        }
+    }
+}
+
 
 pub fn get_process_exe_path(pid: u32) -> Result<String> {
     const MAX_PATH_LEN: usize = 1024;

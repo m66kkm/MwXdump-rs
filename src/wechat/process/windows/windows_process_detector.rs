@@ -95,7 +95,7 @@ impl ProcessDetector for super::WindowsProcessDetector {
         let mut processes = Vec::new();
         tracing::debug!("开始检测微信进程...");
         let process_list = self.get_process_list()?;
-
+        
         tracing::info!("检测到 {} 个微信相关进程", process_list.len());
 
         Ok(processes)
