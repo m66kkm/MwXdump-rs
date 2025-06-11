@@ -7,15 +7,12 @@ use std::path::Path;
 use crate::errors::Result;
 
 pub mod common;
-pub mod v3;
 pub mod v4;
 pub mod validator;
 
 /// 解密器版本
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecryptVersion {
-    /// 微信3.x版本
-    V3,
     /// 微信4.0版本
     V4,
 }
@@ -24,7 +21,6 @@ impl DecryptVersion {
     /// 获取版本字符串
     pub fn as_str(&self) -> &'static str {
         match self {
-            DecryptVersion::V3 => "V3",
             DecryptVersion::V4 => "V4",
         }
     }
@@ -46,17 +42,6 @@ pub struct DecryptConfig {
 }
 
 impl DecryptConfig {
-    /// 创建V3配置
-    pub fn v3() -> Self {
-        Self {
-            version: DecryptVersion::V3,
-            page_size: 4096,
-            iter_count: 64000,
-            hmac_size: 20,
-            reserve_size: 48, // IV(16) + HMAC(20) = 36, 对齐到48
-        }
-    }
-    
     /// 创建V4配置
     pub fn v4() -> Self {
         Self {
@@ -135,7 +120,6 @@ pub trait Decryptor: Send + Sync {
 /// 对应版本的解密器实例
 pub fn create_decryptor(version: DecryptVersion) -> Box<dyn Decryptor> {
     match version {
-        DecryptVersion::V3 => Box::new(v3::V3Decryptor::new()),
         DecryptVersion::V4 => Box::new(v4::V4Decryptor::new()),
     }
 }
@@ -146,17 +130,12 @@ mod tests {
     
     #[test]
     fn test_decrypt_version() {
-        assert_eq!(DecryptVersion::V3.as_str(), "V3");
         assert_eq!(DecryptVersion::V4.as_str(), "V4");
     }
     
     #[test]
     fn test_decrypt_config() {
-        let v3_config = DecryptConfig::v3();
-        assert_eq!(v3_config.version, DecryptVersion::V3);
-        assert_eq!(v3_config.iter_count, 64000);
-        assert_eq!(v3_config.hmac_size, 20);
-        
+
         let v4_config = DecryptConfig::v4();
         assert_eq!(v4_config.version, DecryptVersion::V4);
         assert_eq!(v4_config.iter_count, 256000);
@@ -165,9 +144,7 @@ mod tests {
     
     #[test]
     fn test_create_decryptor() {
-        let v3_decryptor = create_decryptor(DecryptVersion::V3);
-        assert_eq!(v3_decryptor.version(), DecryptVersion::V3);
-        
+
         let v4_decryptor = create_decryptor(DecryptVersion::V4);
         assert_eq!(v4_decryptor.version(), DecryptVersion::V4);
     }

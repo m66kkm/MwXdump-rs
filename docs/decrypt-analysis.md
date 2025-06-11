@@ -19,29 +19,14 @@
 
 ### 2. 密钥派生算法
 
-#### V3版本（微信3.x）
+#### V4版本（微信4.0+）
 ```go
 // 密钥派生参数
-iterCount = 64000
-hashFunc = SHA1
+iterCount = 256000  // 高迭代次数
+hashFunc = SHA512   // 使用SHA512哈希算法
 keySize = 32
 
-// 派生加密密钥
-encKey = PBKDF2(key, salt, iterCount, keySize, SHA1)
-
-// 派生MAC密钥
-macSalt = XOR(salt, 0x3a)  // 每个字节与0x3a异或
-macKey = PBKDF2(encKey, macSalt, 2, keySize, SHA1)
-```
-
-#### V4版本（微信4.0）
-```go
-// 密钥派生参数
-iterCount = 256000  // 迭代次数大幅增加
-hashFunc = SHA512   // 使用更强的哈希算法
-keySize = 32
-
-// 派生过程相同，但参数不同
+// 派生过程
 encKey = PBKDF2(key, salt, iterCount, keySize, SHA512)
 macSalt = XOR(salt, 0x3a)
 macKey = PBKDF2(encKey, macSalt, 2, keySize, SHA512)
@@ -59,7 +44,6 @@ macKey = PBKDF2(encKey, macSalt, 2, keySize, SHA512)
 
 - **PageSize**: 4096字节（标准SQLite页面大小）
 - **Reserve**: IV大小 + HMAC大小，向上对齐到16字节
-  - V3: 16 + 20 = 36 → 48字节（对齐后）
   - V4: 16 + 64 = 80字节
 - **加密数据区域**: PageSize - Reserve
 
@@ -127,12 +111,14 @@ func ValidateKey(page1 []byte, key []byte) bool {
 
 ### 1. 版本差异
 
-| 特性 | V3版本 | V4版本 |
-|------|--------|--------|
-| PBKDF2迭代次数 | 64,000 | 256,000 |
-| 哈希算法 | SHA1 | SHA512 |
-| HMAC大小 | 20字节 | 64字节 |
-| Reserve大小 | 48字节 | 80字节 |
+| 特性 | V4版本 |
+|------|--------|
+| PBKDF2迭代次数 | 256,000 |
+| 哈希算法 | SHA512 |
+| HMAC大小 | 64字节 |
+| Reserve大小 | 80字节 |
+
+**注意**: 本项目仅支持微信4.0+版本，不支持3.x版本。
 
 ### 2. 特殊处理
 
@@ -172,7 +158,6 @@ byteorder = "1.5"  # 处理字节序
 src/wechat/decrypt/
 ├── mod.rs           # 解密器trait定义
 ├── common.rs        # 通用函数（密钥派生、页面解密）
-├── v3.rs            # V3版本实现
 ├── v4.rs            # V4版本实现
 └── validator.rs     # 密钥验证
 ```
@@ -202,11 +187,7 @@ pub trait Decryptor: Send + Sync {
 }
 
 pub enum DecryptVersion {
-    V3 { 
-        iter_count: u32,
-        hash_algo: HashAlgorithm,
-    },
-    V4 { 
+    V4 {
         iter_count: u32,
         hash_algo: HashAlgorithm,
     },

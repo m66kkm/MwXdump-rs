@@ -11,6 +11,7 @@
 - [`architecture-design.md`](./architecture-design.md) - 项目整体架构设计
 - [`phase2-architecture.md`](./phase2-architecture.md) - 第二阶段架构设计
 - [`cli-options-architecture.md`](./cli-options-architecture.md) - CLI选项架构设计
+- [`version-support-policy.md`](./version-support-policy.md) - 微信版本支持策略
 
 ### 📊 项目规划文档
 - [`phase2-plan.md`](./phase2-plan.md) - 第二阶段详细计划

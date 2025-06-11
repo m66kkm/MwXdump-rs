@@ -90,7 +90,7 @@ pub enum WeChatError {
     #[error("数据解密失败: {0}")]
     DecryptionFailed(String),
     
-    #[error("不支持的微信版本: {version}")]
+    #[error("不支持的微信版本: {version}， 请升级到4.0+版本")]
     UnsupportedVersion { version: String },
     
     #[error("权限不足: {0}")]

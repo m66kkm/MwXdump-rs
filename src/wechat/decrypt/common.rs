@@ -98,7 +98,6 @@ pub fn derive_keys_v4(key: &[u8], salt: &[u8]) -> Result<DerivedKeys> {
 /// 根据版本派生密钥
 pub fn derive_keys(key: &[u8], salt: &[u8], config: &DecryptConfig) -> Result<DerivedKeys> {
     match config.version {
-        super::DecryptVersion::V3 => derive_keys_v3(key, salt),
         super::DecryptVersion::V4 => derive_keys_v4(key, salt),
     }
 }
@@ -219,7 +218,6 @@ pub fn verify_page_hmac(
     config: &DecryptConfig,
 ) -> Result<bool> {
     match config.version {
-        super::DecryptVersion::V3 => verify_hmac_sha1(page_data, mac_key, page_num, config),
         super::DecryptVersion::V4 => verify_hmac_sha512(page_data, mac_key, page_num, config),
     }
 }

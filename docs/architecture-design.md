@@ -91,8 +91,7 @@ pub struct ProcessInfo {
 }
 
 pub enum WeChatVersion {
-    V3x { exact: String },
-    V40 { exact: String },
+    V4x { exact: String },
     Unknown,
 }
 ```
@@ -116,12 +115,8 @@ pub trait KeyExtractor: Send + Sync {
 }
 
 // 平台和版本特定实现
-pub struct V3KeyExtractor {
-    searcher: MemorySearcher,
-}
-
 pub struct V4KeyExtractor {
-    // V4特定实现
+    searcher: MemorySearcher,
 }
 ```
 
@@ -171,7 +166,7 @@ impl MemorySearcher {
 
 #### 核心算法实现
 ```rust
-// Go算法精确移植
+// V4版本密钥搜索算法
 async fn search_worker(
     worker_id: usize,
     api: Arc<WindowsApi>,
@@ -180,7 +175,7 @@ async fn search_worker(
     source_pid: u32,
     result_tx: Arc<Mutex<Option<oneshot::Sender<WeChatKey>>>>,
 ) {
-    // 1. 定义搜索模式
+    // 1. 定义V4版本搜索模式
     let key_pattern = if is_64bit {
         vec![0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
     } else {
@@ -196,7 +191,7 @@ async fn search_worker(
             if is_valid_pointer(ptr_value) {
                 // 5. 读取密钥数据
                 if let Ok(key_data) = api.read_memory(ptr_value as usize, 32) {
-                    let key = WeChatKey::new(key_data, source_pid, KeyVersion::V3x);
+                    let key = WeChatKey::new(key_data, source_pid, KeyVersion::V4x);
                     // 6. 发送结果并停止搜索
                     send_result(key).await;
                     return;
@@ -221,14 +216,10 @@ pub trait Decryptor: Send + Sync {
 }
 
 // 版本特定实现
-pub struct V3Decryptor {
+pub struct V4Decryptor {
     iter_count: i32,
     hmac_size: i32,
     hash_func: fn() -> Box<dyn Digest>,
-}
-
-pub struct V4Decryptor {
-    // V4特定参数
 }
 ```
 

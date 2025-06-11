@@ -282,7 +282,6 @@ async fn determine_version(
 ) -> Result<DecryptVersion> {
     if let Some(version_str) = &args.version {
         match version_str.to_lowercase().as_str() {
-            "v3" => Ok(DecryptVersion::V3),
             "v4" => Ok(DecryptVersion::V4),
             _ => Err(crate::errors::WeChatError::DecryptionFailed(
                 format!("不支持的版本: {}", version_str)
@@ -424,7 +423,6 @@ async fn determine_version_safe(
 ) -> Result<DecryptVersion> {
     if let Some(version_str) = &args.version {
         match version_str.to_lowercase().as_str() {
-            "v3" => Ok(DecryptVersion::V3),
             "v4" => Ok(DecryptVersion::V4),
             _ => Err(crate::errors::WeChatError::DecryptionFailed(
                 format!("不支持的版本: {}", version_str)

@@ -55,7 +55,7 @@ impl super::WindowsProcessDetector {
     }
 
     /// 获取 WeChat.exe 主进程（排除子进程）
-    pub async fn get_main_wechat_processes(&self) -> Result<Vec<WechatProcessInfo>> {
+    async fn get_main_wechat_processes(&self) -> Result<Vec<WechatProcessInfo>> {
         let all_processes = self.detect_processes().await?;
         println!("检测到 {} 个微信相关进程", all_processes.len());
 
@@ -66,7 +66,7 @@ impl super::WindowsProcessDetector {
     }
 
     /// 验证进程版本是否有效（包含数字和点号，非Unknown）
-    pub fn validate_process_version(&self, process: &WechatProcessInfo) -> bool {
+    fn validate_process_version(&self, process: &WechatProcessInfo) -> bool {
         match &process.version {
             WeChatVersion::V3x { exact } | WeChatVersion::V4x { exact } => {
                 exact.chars().any(|c| c.is_ascii_digit()) && exact.contains('.')
@@ -76,7 +76,7 @@ impl super::WindowsProcessDetector {
     }
 
     /// 获取有效版本的 WeChat.exe 主进程
-    pub async fn get_valid_main_processes(&self) -> Result<Vec<WechatProcessInfo>> {
+    async fn get_valid_main_processes(&self) -> Result<Vec<WechatProcessInfo>> {
         tracing::info!("开始获取有效的WeChat.exe主进程...");
         let main_processes = self.get_main_wechat_processes().await?;
         Ok(main_processes
@@ -85,6 +85,8 @@ impl super::WindowsProcessDetector {
             .collect())
     }
 
+
+
 }
 
 #[async_trait]
@@ -92,11 +94,10 @@ impl ProcessDetector for super::WindowsProcessDetector {
     async fn detect_processes(&self) -> Result<Vec<WechatProcessInfo>> {
         let mut processes = Vec::new();
         tracing::debug!("开始检测微信进程...");
-        let process_list = self.get_process_list();
+        let process_list = self.get_process_list()?;
 
-        tracing::info!("检测到 {} 个微信相关进程", process_list?.len());
+        tracing::info!("检测到 {} 个微信相关进程", process_list.len());
 
-        info!("检测到 {} 个微信进程", processes.len());
         Ok(processes)
     }
 
