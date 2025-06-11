@@ -1,49 +1,44 @@
-use anyhow::Result;
-use windows_result::BOOL;
+use crate::utils::ProcessInfo;
+use crate::errors::Result;
 use windows::Win32::Foundation::STILL_ACTIVE;
-use super::ProcessInfo; // 假设 ProcessInfo 在 super 模块中定义
 use windows::{
     core::{HSTRING, PCWSTR},
     Win32::{
         Foundation::{CloseHandle, HANDLE}, // CloseHandle 已经不需要，可以移除
+        Storage::FileSystem::{
+            GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW, VS_FIXEDFILEINFO,
+        },
         System::Diagnostics::ToolHelp::{
             CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
             TH32CS_SNAPPROCESS,
         },
-        Storage::FileSystem::{
-            GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW, VS_FIXEDFILEINFO,
-        },
         System::{
             ProcessStatus::GetModuleFileNameExW,
-            Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ, GetExitCodeProcess}
+            Threading::{
+                GetExitCodeProcess, OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
+            },
         },
     },
 };
+use windows_result::BOOL;
 
-use windows::{
-    Win32::{
-        System::{
-            Diagnostics::{
-                Debug::ReadProcessMemory,
-                ToolHelp::{
-                    Module32FirstW, Module32NextW, MODULEENTRY32W,
-                    TH32CS_SNAPMODULE, TH32CS_SNAPMODULE32,
-                },
-            },
-            Memory::{
-                VirtualQueryEx, MEMORY_BASIC_INFORMATION, MEM_COMMIT, PAGE_EXECUTE_READ,
-                PAGE_EXECUTE_READWRITE, PAGE_READONLY, PAGE_READWRITE,
-            },
-            SystemInformation::{
-                GetNativeSystemInfo, PROCESSOR_ARCHITECTURE, PROCESSOR_ARCHITECTURE_AMD64,
-                PROCESSOR_ARCHITECTURE_ARM, PROCESSOR_ARCHITECTURE_ARM64,
-                PROCESSOR_ARCHITECTURE_IA64, PROCESSOR_ARCHITECTURE_INTEL, SYSTEM_INFO,
-            },
-            Threading::{
-                IsWow64Process, PROCESS_QUERY_LIMITED_INFORMATION
-            },
+use windows::Win32::System::{
+    Diagnostics::{
+        Debug::ReadProcessMemory,
+        ToolHelp::{
+            Module32FirstW, Module32NextW, MODULEENTRY32W, TH32CS_SNAPMODULE, TH32CS_SNAPMODULE32,
         },
     },
+    Memory::{
+        VirtualQueryEx, MEMORY_BASIC_INFORMATION, MEM_COMMIT, PAGE_EXECUTE_READ,
+        PAGE_EXECUTE_READWRITE, PAGE_READONLY, PAGE_READWRITE,
+    },
+    SystemInformation::{
+        GetNativeSystemInfo, PROCESSOR_ARCHITECTURE, PROCESSOR_ARCHITECTURE_AMD64,
+        PROCESSOR_ARCHITECTURE_ARM, PROCESSOR_ARCHITECTURE_ARM64, PROCESSOR_ARCHITECTURE_IA64,
+        PROCESSOR_ARCHITECTURE_INTEL, SYSTEM_INFO,
+    },
+    Threading::{IsWow64Process, PROCESS_QUERY_LIMITED_INFORMATION},
 };
 
 // use std::path::PathBuf;
@@ -67,11 +62,19 @@ pub fn list_processes(filter: &[&str]) -> Result<Vec<ProcessInfo>> {
                 PCWSTR::from_raw(process_entry.szExeFile.as_ptr()).to_string()?
             };
 
-            if filter.iter().any(|name| name.eq_ignore_ascii_case(&process_name)) {
-                tracing::info!("检测到进程: pid: {}, name: {}", process_entry.th32ProcessID, process_name);
+            if filter
+                .iter()
+                .any(|name| name.eq_ignore_ascii_case(&process_name))
+            {
+                tracing::info!(
+                    "检测到进程: pid: {}, name: {}",
+                    process_entry.th32ProcessID,
+                    process_name
+                );
                 let process_exe_path = get_process_exe_path(process_entry.th32ProcessID)?;
                 let file_version_info = get_file_version_info(&process_exe_path)?;
                 processes.push(ProcessInfo {
+                    parent_pid: process_entry.th32ParentProcessID,
                     pid: process_entry.th32ProcessID,
                     name: process_name,
                     path: Some(process_exe_path), // 初始时路径为 None
@@ -101,17 +104,14 @@ pub fn get_process_exe_path(pid: u32) -> Result<String> {
     let mut exe_path_buffer: Vec<u16> = vec![0; MAX_PATH_LEN];
 
     // OpenProcess 返回 Result<HANDLE>，用 ? 处理错误
-    let process_handle: HANDLE = unsafe {
-        OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid)?
-    };
+    let process_handle: HANDLE =
+        unsafe { OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid)? };
     // process_handle 会在离开作用域时自动关闭
 
     // *** FIX: 将参数包装在 Option 中 ***
     // hprocess: Some(process_handle)
     // hmodule: None (等同于传递 NULL，表示获取主可执行文件路径)
-    let len = unsafe {
-        GetModuleFileNameExW(Some(process_handle), None, &mut exe_path_buffer)
-    };
+    let len = unsafe { GetModuleFileNameExW(Some(process_handle), None, &mut exe_path_buffer) };
 
     if len == 0 {
         // 如果失败，从 GetLastError() 获取错误信息
@@ -123,8 +123,7 @@ pub fn get_process_exe_path(pid: u32) -> Result<String> {
     Ok(exe_path)
 }
 
-
- pub fn get_file_version_info(exe_path: &str) -> Result<String> {
+pub fn get_file_version_info(exe_path: &str) -> Result<String> {
     tracing::debug!("--- 开始获取文件版本 for: [{}] ---", exe_path);
 
     let wide_path = HSTRING::from(exe_path);
@@ -149,7 +148,10 @@ pub fn get_process_exe_path(pid: u32) -> Result<String> {
             err
         ));
     }
-    tracing::debug!("步骤 1 成功: GetFileVersionInfoSizeW 返回大小: {}", version_info_size);
+    tracing::debug!(
+        "步骤 1 成功: GetFileVersionInfoSizeW 返回大小: {}",
+        version_info_size
+    );
 
     // 步骤 2: 获取版本信息数据
     let mut version_info_buffer: Vec<u8> = vec![0; version_info_size as usize];
@@ -163,7 +165,10 @@ pub fn get_process_exe_path(pid: u32) -> Result<String> {
     };
 
     if let Err(e) = get_info_result {
-        tracing::error!("步骤 2 失败: GetFileVersionInfoW 返回错误. Win32 Error: {}", e);
+        tracing::error!(
+            "步骤 2 失败: GetFileVersionInfoW 返回错误. Win32 Error: {}",
+            e
+        );
         return Err(e.into());
     }
     tracing::debug!("步骤 2 成功: GetFileVersionInfoW 执行完毕.");
@@ -212,11 +217,14 @@ pub fn get_process_exe_path(pid: u32) -> Result<String> {
     }
     // 检查 len 是否至少是 VS_FIXEDFILEINFO 的大小
     if len < std::mem::size_of::<VS_FIXEDFILEINFO>() as u32 {
-         tracing::error!("步骤 4 失败: VerQueryValueW 返回的长度 ({}) 小于 VS_FIXEDFILEINFO 的大小.", len);
-         return Err(anyhow::anyhow!(
-             "Returned data length is too small for VS_FIXEDFILEINFO for [{}]",
-             exe_path
-         ));
+        tracing::error!(
+            "步骤 4 失败: VerQueryValueW 返回的长度 ({}) 小于 VS_FIXEDFILEINFO 的大小.",
+            len
+        );
+        return Err(anyhow::anyhow!(
+            "Returned data length is too small for VS_FIXEDFILEINFO for [{}]",
+            exe_path
+        ));
     }
     tracing::debug!("步骤 4 成功: VerQueryValueW 执行完毕.");
 
@@ -243,7 +251,11 @@ pub fn get_process_exe_path(pid: u32) -> Result<String> {
     let patch = fixed_file_info.dwFileVersionLS & 0xffff;
     let version_string = format!("{}.{}.{}.{}", major, minor, build, patch);
 
-    tracing::info!("--- 文件版本获取完成 for [{}], 版本: {} ---", exe_path, version_string);
+    tracing::info!(
+        "--- 文件版本获取完成 for [{}], 版本: {} ---",
+        exe_path,
+        version_string
+    );
 
     Ok(version_string)
 }
@@ -277,7 +289,6 @@ pub fn get_process_architecture(pid: u32) -> Result<usize> {
     }
 }
 
-
 /// 检查指定 PID 的进程是否仍在运行。
 /// 本函数使用 `windows` crate 实现。
 ///
@@ -289,17 +300,16 @@ pub fn get_process_architecture(pid: u32) -> Result<usize> {
 pub fn is_process_running(pid: &u32) -> bool {
     //检查 pid 是否为 0，因为 0 通常表示系统进程或无效 PID。
     // 如果 pid 为 0，直接返回 false，因为无效的 PID 不可能对应一个正在运行的进程。
-    // 这里的 pid 是引用类型，所以需要解引用才能获取实际的值。  
+    // 这里的 pid 是引用类型，所以需要解引用才能获取实际的值。
     if *pid == 0 {
         return false;
     }
-    
+
     // unsafe 块是必需的，因为我们正在调用 Windows API (FFI)
     unsafe {
         // 1. 调用 `windows` crate 的 OpenProcess 函数，尝试获取进程句柄。
         //    该函数返回一个 Result，我们需要处理它。
         if let Ok(process_handle) = OpenProcess(PROCESS_QUERY_INFORMATION, false, *pid) {
-            
             // 2. 声明一个 u32 类型的变量来接收退出码。
             let mut exit_code: u32 = 0;
 

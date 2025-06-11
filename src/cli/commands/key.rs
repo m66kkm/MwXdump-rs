@@ -4,6 +4,8 @@ use crate::cli::context::ExecutionContext;
 use crate::errors::Result;
 use crate::wechat;
 use crate::wechat::key::KeyExtractor;
+use crate::wechat::process::{ProcessDetector, create_detector};
+
 
 /// 执行密钥提取测试
 pub async fn execute(context: &ExecutionContext) -> Result<()> {
@@ -26,13 +28,14 @@ pub async fn execute(context: &ExecutionContext) -> Result<()> {
     tracing::debug!("开始执行密钥提取测试，日志级别: {}", context.log_level());
     
     // 使用统一方法获取有效的主进程
-    let detector = wechat::process::PlatformDetector::new()?;
-    let valid_main_processes = detector.get_valid_main_processes().await?;
+    let detector = create_detector()?;
+    
+    let valid_main_processes = detector.detect_processes().await?;
     
     tracing::debug!("检测到 {} 个有效的WeChat.exe主进程", valid_main_processes.len());
 
     if valid_main_processes.is_empty() {
-        println!("❌ 未发现有效版本的WeChat.exe主进程");
+        println!("❌ 未发现有效版本的微信主进程");
         println!("   请确保：");
         println!("   - 微信正在运行");
         println!("   - 微信版本支持密钥提取");
@@ -40,7 +43,7 @@ pub async fn execute(context: &ExecutionContext) -> Result<()> {
         return Err(crate::errors::WeChatError::ProcessNotFound.into());
     }
     
-    println!("发现 {} 个有效的WeChat.exe主进程", valid_main_processes.len());
+    println!("发现 {} 个有效的微信主进程", valid_main_processes.len());
     
     let mut success_count = 0;
     let mut total_count = 0;

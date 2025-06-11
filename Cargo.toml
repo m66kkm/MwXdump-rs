@@ -22,11 +22,11 @@ futures = "0.3"
 # Web框架
 axum = { version = "0.8", features = ["multipart"] }
 tower = { version = "0.5", features = ["full"] }
-tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
+tower-http = { version = "0.6.6", features = ["cors", "fs", "trace"] }
 hyper = { version = "1.6", features = ["full"] }
 
 # Terminal UI
-ratatui = "0.26"
+ratatui = "0.29.0"
 crossterm = "0.27"
 
 # 命令行
@@ -43,7 +43,7 @@ prost = "0.13"
 prost-types = "0.13"
 
 # 错误处理
-thiserror = "1.0"
+thiserror = "2.0.12"
 anyhow = "1.0"
 
 # 日志

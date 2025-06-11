@@ -1,5 +1,5 @@
 use windows_result::BOOL;
-use anyhow::Result;
+use crate::errors::Result;
 use std::ffi::c_void;
 use windows::{
     core::PCWSTR,

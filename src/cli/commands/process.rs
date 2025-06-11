@@ -12,7 +12,7 @@ pub async fn execute(context: &ExecutionContext) -> Result<()> {
         tracing::debug!("配置的微信数据目录: {:?}", data_dir);
     }
     
-    let detector = create_detector();
+    let detector = create_detector()?;
 
 
     match detector.detect_processes().await {

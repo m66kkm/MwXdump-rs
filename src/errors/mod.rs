@@ -4,10 +4,10 @@
 
 use thiserror::Error;
 
-pub type Result<T> = std::result::Result<T, MwxDumpError>;
+pub type Result<T> = anyhow::Result<T>;
 
 /// 应用主要错误类型
-#[derive(Error, Debug)]
+#[derive(Error, Debug)] // Clone, PartialEq, Eq are useful for testing
 pub enum MwxDumpError {
     #[error("配置错误: {0}")]
     Config(#[from] ConfigError),

@@ -2,6 +2,7 @@ use super::super::WeChatVersion;
 use super::{ProcessDetector, WechatProcessInfo};
 
 use once_cell::sync::Lazy;
+use windows::Win32::System::Registry::HKEY_CURRENT_USER;
 
 const WECHAT_REG_KEY_PATH: &str = "Software\\Tencent\\WeChat";
 const WECHAT_FILES_VALUE_NAME: &str = "FileSavePath";
@@ -18,11 +19,6 @@ const WXWork_REG_KEY_PATH: &str = "Software\\Tencent\\WeChat";
 const WXWork_FILES_VALUE_NAME: &str = "FileSavePath";
 static WXWORK_PROCESS_NAMES: Lazy<Vec<&'static str>> = Lazy::new(|| vec!["WXWork.exe"]);
 
-pub struct WindowsProcessDetector {
-    /// 微信进程名称列表
-    wechat_process_names: Vec<String>,
-}
-
 pub fn is_wxwork(process: &WechatProcessInfo) -> bool {
     if WXWORK_PROCESS_NAMES
         .iter()
@@ -32,3 +28,10 @@ pub fn is_wxwork(process: &WechatProcessInfo) -> bool {
     }
     return false;
 }
+
+pub struct WindowsProcessDetector {
+    /// 微信进程名称列表
+    wechat_process_names: Vec<String>,
+}
+
+pub mod windows_process_detector;

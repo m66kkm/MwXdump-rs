@@ -41,7 +41,7 @@ impl FromStr for WeChatVersion {
     // 这里的 Err 类型可以使用我们自定义的错误类型
     type Err = MwxDumpError;
 
-    fn from_str(s: &str) -> Result<Self> {
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         // 在这里你应该放入你真实的解析逻辑
         // 下面是一个简化的例子
         if s.starts_with("3.") {

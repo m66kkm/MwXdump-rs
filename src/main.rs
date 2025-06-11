@@ -1,6 +1,6 @@
-use anyhow::Result;
 use clap::Parser;
 use tracing::{info, error};
+use crate::errors::Result;
 
 mod app;
 mod cli;
@@ -17,7 +17,7 @@ mod utils;
 use cli::Cli;
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> Result<()> {
     // 解析命令行参数
     let cli = Cli::parse();
     
