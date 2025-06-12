@@ -11,6 +11,7 @@ static WECHAT_PROCESS_NAMES: Lazy<Vec<&'static str>> = Lazy::new(|| {
         "WeChat.exe",
         "Weixin.exe", // 微信4.0的主可执行文件名
         "WeChatApp.exe",
+        "Weixin.dll"
         // "WeChatAppEx.exe", // 微信增强版
     ]
 });

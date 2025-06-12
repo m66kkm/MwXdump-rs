@@ -33,9 +33,9 @@ pub enum MwxDumpError {
     #[error("序列化错误: {0}")]
     Serialization(#[from] serde_json::Error),
 
-    #[error("进程路径缺失")]
-    MissingPath,
-    
+    #[error("系统错误: '{0}'")]
+    System(#[from] SystemError),
+  
     #[error("无效或无法解析的版本字符串: '{0}'")]
     InvalidVersion(String),
     
@@ -58,6 +58,20 @@ pub enum ConfigError {
     #[error("配置项值无效: {key} = {value}")]
     InvalidValue { key: String, value: String },
 }
+
+#[derive(Error, Debug)]
+pub enum SystemError {
+
+    #[error("模块信息获取失败: {value} - pid: {pid}")]
+    ModuleInfoMissing{ value: String, pid: u32 },
+ 
+    #[error("未知系统错误: {value}")]
+    UnknownError { value: String },
+    
+    #[error("进程路径缺失")]
+    MissingPath,
+}
+
 
 /// 数据库相关错误
 #[derive(Error, Debug)]

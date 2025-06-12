@@ -1,5 +1,6 @@
 
 use crate::errors::MwxDumpError;
+use crate::errors::SystemError;
 use crate::errors::Result;
 use crate::utils::ProcessInfo;
 use crate::wechat::WeChatVersion;
@@ -63,7 +64,7 @@ impl WechatProcessInfo {
     pub fn new(process_info: ProcessInfo) -> Result<Self> {
         // 1. 处理路径：目标结构体中这是必需的。
         // 我们使用 `ok_or` 将 Option 转换为 Result。
-        let path_str = process_info.path.ok_or(MwxDumpError::MissingPath)?;
+        let path_str = process_info.path.ok_or(SystemError::MissingPath)?;
         let path = PathBuf::from(path_str);
 
         // 2. 处理版本：解析可选的版本字符串。
