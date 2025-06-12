@@ -150,15 +150,6 @@ pub fn get_module_info(pid: u32, module_name: &str) -> Result<ModuleInfo> {
     });
 }
 
-pub fn read_module_memory(pid: u32, module_name: &str) -> Result<Vec<u8>> {
-    let module_info = get_module_info(pid, module_name)?;
-    tracing::debug!(
-        "Found module '{}' at base {:#x} with size {} bytes.",
-        module_name, module_info.base_address, module_info.size
-    );
-    read_process_memory(pid, module_info.base_address, module_info.size)
-}
-
 pub fn search_memory_for_pattern(
     pid: u32,
     pattern: &[u8],
@@ -292,7 +283,6 @@ pub fn search_module_for_pattern(
     );
     Ok(found_addresses)
 }
-
 
 // --- 私有辅助函数 ---
 

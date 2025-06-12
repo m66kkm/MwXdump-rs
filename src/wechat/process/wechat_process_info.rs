@@ -37,7 +37,7 @@ impl WechatProcessInfo {
     pub async fn is_running(&self) -> bool {
         #[cfg(target_os = "windows")]
         {
-            return crate::utils::windows::process::is_process_running(&self.pid);
+            return crate::utils::windows::process::is_process_running(self.pid);
         }
 
         #[cfg(target_os = "macos")]

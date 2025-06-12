@@ -75,31 +75,33 @@ impl super::WindowsProcessDetector {
         }
     }
 
-    /// 获取有效版本的 WeChat.exe 主进程
-    async fn get_valid_main_processes(&self) -> Result<Vec<WechatProcessInfo>> {
-        tracing::info!("开始获取有效的WeChat.exe主进程...");
-        let main_processes = self.get_main_wechat_processes().await?;
-        Ok(main_processes
-            .into_iter()
-            .filter(|p: &WechatProcessInfo| self.validate_process_version(p))
-            .collect())
-    }
-
-
-
 }
 
 #[async_trait]
 impl ProcessDetector for super::WindowsProcessDetector {
     async fn detect_processes(&self) -> Result<Vec<WechatProcessInfo>> {
         let mut processes = Vec::new();
-        tracing::debug!("开始检测微信进程...");
+        tracing::info!("开始检测微信进程...");
+        let process_list = self.get_process_list()?;
+        // crate::utils::windows::process::get_memory(69393);
+        tracing::info!("检测到 {} 个微信相关进程", process_list.len());
+        tracing::info!("开始处理每个进程...");
+        for process_info in process_list {
+            tracing::info!("处理进程: {:?}", process_info);
+            let path = match &process_info.path {
+                Some(p) => PathBuf::from(p),
+                None => {
+                    tracing::warn!("进程 {} 没有可执行文件路径", process_info.pid);
+                    continue;
+                }
+            };
 
-        // let process_list = self.get_process_list()?;
-        crate::utils::windows::process::get_memory(69393);
-        
-        // tracing::info!("检测到 {} 个微信相关进程", process_list.len());
 
+            // let data_dir = self.find_wechat_data_directory(&WechatProcessInfo {
+            //     pid: process_info.pid,
+            //     name: process_info.name.clone(),
+            // }
+        }
         Ok(processes)
     }
 
