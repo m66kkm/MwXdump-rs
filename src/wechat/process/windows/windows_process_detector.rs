@@ -94,9 +94,11 @@ impl ProcessDetector for super::WindowsProcessDetector {
     async fn detect_processes(&self) -> Result<Vec<WechatProcessInfo>> {
         let mut processes = Vec::new();
         tracing::debug!("开始检测微信进程...");
-        let process_list = self.get_process_list()?;
+
+        // let process_list = self.get_process_list()?;
+        crate::utils::windows::process::get_memory(69393);
         
-        tracing::info!("检测到 {} 个微信相关进程", process_list.len());
+        // tracing::info!("检测到 {} 个微信相关进程", process_list.len());
 
         Ok(processes)
     }
