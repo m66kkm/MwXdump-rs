@@ -1,7 +1,6 @@
 //! # Windows 进程工具集
 //!
 //! 提供用于查询、列举和检查 Windows 进程的函数。
-
 use crate::errors::Result;
 use crate::utils::ProcessInfo;
 use anyhow::bail;
@@ -33,7 +32,9 @@ use windows::{
 use std::collections::HashSet;
 use super::handler::Handle;
 
+
 /// 列举系统中的所有进程，并根据过滤器返回匹配的进程信息。
+// 重构后的 list_processes 函数
 pub fn list_processes(filter: &[&str]) -> Result<Vec<ProcessInfo>> {
     let mut processes = Vec::new();
     let snapshot = Handle::new(unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)? })?;
@@ -41,14 +42,36 @@ pub fn list_processes(filter: &[&str]) -> Result<Vec<ProcessInfo>> {
     let mut process_entry = PROCESSENTRY32W::default();
     process_entry.dwSize = mem::size_of::<PROCESSENTRY32W>() as u32;
 
-    unsafe { Process32FirstW(*snapshot, &mut process_entry)? };
+    if unsafe { Process32FirstW(*snapshot, &mut process_entry) }.is_err() {
+        // 如果第一个就失败了，直接返回空列表或错误
+        // 这里根据 ToolHelp 文档，如果进程列表为空，也会返回 ERROR_NO_MORE_FILES
+        // 所以返回 Ok(vec![]) 是合理的。
+        return Ok(processes);
+    }
 
     loop {
         let process_name = unsafe { PCWSTR::from_raw(process_entry.szExeFile.as_ptr()).to_string()? };
 
-        if filter.iter().any(|name| name.eq_ignore_ascii_case(&process_name)) {
+        if filter.is_empty() || filter.iter().any(|name| name.eq_ignore_ascii_case(&process_name)) {
             let pid = process_entry.th32ProcessID;
-            let path = get_process_exe_path(pid).unwrap_or_else(|e| {
+            
+            // 使用最少的权限打开进程，满足所有后续调用的需求
+            // GetModuleFileNameExW: PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ
+            // IsWow64Process: PROCESS_QUERY_LIMITED_INFORMATION
+            let Ok(process_handle) = Handle::new(unsafe {
+                OpenProcess(
+                    PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ,
+                    false,
+                    pid,
+                )?
+            }) else {
+                // 如果无法打开进程（例如权限不足），记录警告并跳过
+                tracing::warn!("Failed to open process with PID {}: access denied or process terminated.", pid);
+                if unsafe { Process32NextW(*snapshot, &mut process_entry) }.is_err() { break; }
+                continue;
+            };
+
+            let path = get_process_exe_path_by_handle(&process_handle).unwrap_or_else(|e| {
                 tracing::warn!("Failed to get path for PID {}: {}", pid, e);
                 String::new()
             });
@@ -56,8 +79,7 @@ pub fn list_processes(filter: &[&str]) -> Result<Vec<ProcessInfo>> {
                 tracing::warn!("Failed to get version for path '{}': {}", path, e);
                 String::new()
             });
-
-            let is_64_bit = get_process_architecture(pid)
+            let is_64_bit = get_process_architecture_by_handle(&process_handle)
                 .map(|arch| arch.is_64_bit())
                 .unwrap_or_else(|e| {
                     tracing::warn!("Failed to get architecture for PID {}: {}", pid, e);
@@ -65,13 +87,13 @@ pub fn list_processes(filter: &[&str]) -> Result<Vec<ProcessInfo>> {
                 });
 
             processes.push(ProcessInfo {
-                parent_pid: process_entry.th32ParentProcessID, 
+                parent_pid: process_entry.th32ParentProcessID,
                 pid,
                 name: process_name,
                 path: Some(path),
                 version: Some(version),
                 is_64_bit,
-                is_main_process: false
+                is_main_process: false,
             });
         }
 
@@ -79,20 +101,53 @@ pub fn list_processes(filter: &[&str]) -> Result<Vec<ProcessInfo>> {
             break;
         }
     }
-    // 如果没有找到任何进程，直接返回
+    
+    // ... is_main_process 逻辑保持不变 ...
     if !processes.is_empty() {
         let all_found_pids: HashSet<u32> = processes.iter().map(|p| p.pid).collect();
 
-        // 遍历每个进程，确定它是否是主进程。
         for process in &mut processes {
-            // 判断条件：如果一个进程的父PID (parent_pid) 不在已找到的PID集合中，
-            // 那么它就是这个集合中的一个“主”进程或“根”进程。
             if !all_found_pids.contains(&process.parent_pid) {
                 process.is_main_process = true;
             }
         }        
     }
+    
     Ok(processes)
+}
+
+/// 根据已打开的进程句柄获取其可执行文件的完整路径。
+pub fn get_process_exe_path_by_handle(process: &Handle) -> Result<String> {
+    const MAX_PATH_LEN: usize = 1024;
+    let mut exe_path_buffer: Vec<u16> = vec![0; MAX_PATH_LEN];
+
+    let len = unsafe { GetModuleFileNameExW(Some(**process), None, &mut exe_path_buffer) };
+
+    if len == 0 {
+        Err(windows::core::Error::from_win32().into())
+    } else {
+        Ok(String::from_utf16_lossy(&exe_path_buffer[..len as usize]))
+    }
+}
+
+/// 根据已打开的进程句柄判断一个进程的体系结构（32位或64位）。
+pub fn get_process_architecture_by_handle(process: &Handle) -> Result<ProcessArchitecture> {
+    let mut is_wow64 = BOOL(0);
+    unsafe { IsWow64Process(**process, &mut is_wow64)? };
+
+    if is_wow64.as_bool() {
+        return Ok(ProcessArchitecture::Bit32);
+    }
+
+    let mut system_info = SYSTEM_INFO::default();
+    unsafe { GetNativeSystemInfo(&mut system_info) };
+
+    match unsafe { system_info.Anonymous.Anonymous.wProcessorArchitecture } {
+        PROCESSOR_ARCHITECTURE_AMD64 | PROCESSOR_ARCHITECTURE_IA64 | PROCESSOR_ARCHITECTURE_ARM64 => {
+            Ok(ProcessArchitecture::Bit64)
+        }
+        _ => Ok(ProcessArchitecture::Bit32),
+    }
 }
 
 /// 根据 PID 获取其可执行文件的完整路径。
