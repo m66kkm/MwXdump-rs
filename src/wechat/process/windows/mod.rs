@@ -11,7 +11,6 @@ static WECHAT_PROCESS_NAMES: Lazy<Vec<&'static str>> = Lazy::new(|| {
         "WeChat.exe",
         "Weixin.exe", // 微信4.0的主可执行文件名
         "WeChatApp.exe",
-        "Weixin.dll"
         // "WeChatAppEx.exe", // 微信增强版
     ]
 });
@@ -21,18 +20,16 @@ const WXWork_FILES_VALUE_NAME: &str = "FileSavePath";
 static WXWORK_PROCESS_NAMES: Lazy<Vec<&'static str>> = Lazy::new(|| vec!["WXWork.exe"]);
 
 pub fn is_wxwork(process: &WechatProcessInfo) -> bool {
-    if WXWORK_PROCESS_NAMES
+    // .any() 本身就返回一个 bool 值，直接返回它的结果即可。
+    WXWORK_PROCESS_NAMES
         .iter()
-        .any(|wxwork_name| process.name.eq_ignore_ascii_case(wxwork_name))
-    {
-        return true;
-    }
-    return false;
+        .any(|&wxwork_name| process.name.eq_ignore_ascii_case(wxwork_name))
 }
 
+#[derive(Clone)]
 pub struct WindowsProcessDetector {
     /// 微信进程名称列表
-    wechat_process_names: Vec<String>,
+    wechat_process_names: Vec<&'static str>,
 }
 
 pub mod windows_process_detector;

@@ -53,6 +53,7 @@ impl WechatProcessInfo {
         false
     }
 
+    // pub fn set_version();
     pub fn is_wxwork(&self) -> bool {
         platform_impl::is_wxwork(self)
     }
