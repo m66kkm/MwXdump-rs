@@ -43,7 +43,7 @@ pub trait KeyExtractor: Send + Sync {
     async fn extract_key(&self, process: &WechatProcessInfo) -> Result<WeChatKey>;
 
     /// 在内存数据中搜索密钥
-    async fn search_key_in_memory(&self, memory: &[u8]) -> Result<Option<Vec<u8>>>;
+    async fn search_key_in_memory(&self, memory: &[u8], process: &WechatProcessInfo) -> Result<Option<Vec<u8>>>;
 
     /// 验证密钥是否有效
     async fn validate_key(&self, key: &[u8]) -> Result<bool>;

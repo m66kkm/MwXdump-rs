@@ -32,6 +32,9 @@ pub struct WechatProcessInfo {
     pub data_dir: Option<PathBuf>,
     /// 检测时间
     pub detected_at: DateTime<Utc>,
+    /// 软件架构
+    pub is_64_bit: bool,
+
 }
 
 impl WechatProcessInfo {
@@ -70,14 +73,6 @@ impl WechatProcessInfo {
         let path_str = process_info.path.ok_or(SystemError::MissingPath)?;
         let path = PathBuf::from(path_str);
 
-        // 2. 处理版本：解析可选的版本字符串。
-        // 如果版本字符串是 None，我们可以默认为 Unknown。
-        // 如果是 Some，我们就尝试解析它。
-        // let version = match process_info.version {
-        //     Some(v_str) => v_str.parse::<WeChatVersion>()?, // '?' 会自动传递 ConversionError
-        //     None => WeChatVersion::Unknown,                 // 或者如果未知版本不允许，就返回错误
-        // };
-
         let version = match process_info.version {
             Some(v_str) => {
                 // 首先，尝试解析版本字符串
@@ -105,11 +100,85 @@ impl WechatProcessInfo {
             pid: process_info.pid,
             name: process_info.name, // name 是 String，可以直接移动
             is_main_process:process_info.is_main_process,
+            is_64_bit: process_info.is_64_bit,
             path,
             version,
             // 初始化源结构体中不存在的字段
             data_dir: None,          // 我们没有这个信息，所以初始化为 None
             detected_at: Utc::now(), // 将检测时间设置为当前时间
         })
+    }
+
+    /// 从数据目录路径中提取当前的 wxid
+    ///
+    /// # 示例
+    ///
+    /// 如果 data_dir 是 `B:\xwechat_files\wxid_acglnhh5lp3l21_36f6`，
+    /// 则返回 `Some("wxid_acglnhh5lp3l21")`
+    pub fn get_current_wxid(&self) -> Option<String> {
+        self.data_dir.as_ref().and_then(|data_dir| {
+            // 获取路径的最后一个组件（目录名）
+            data_dir.file_name()
+                .and_then(|name| name.to_str())
+                .and_then(|name_str| {
+                    // 检查是否以 wxid_ 开头
+                    if name_str.starts_with("wxid_") {
+                        // 查找第一个下划线后的第二个下划线位置
+                        // wxid_acglnhh5lp3l21_36f6
+                        //     ^              ^
+                        //     5              20
+                        let first_underscore = 4; // "wxid" 的长度
+                        if let Some(second_underscore_pos) = name_str[first_underscore + 1..].find('_') {
+                            // 提取 wxid 部分（不包含后缀）
+                            let wxid_end = first_underscore + 1 + second_underscore_pos;
+                            Some(name_str[..wxid_end].to_string())
+                        } else {
+                            // 如果没有第二个下划线，返回整个目录名
+                            Some(name_str.to_string())
+                        }
+                    } else {
+                        None
+                    }
+                })
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_get_current_wxid() {
+        // 测试正常情况
+        let mut process_info = WechatProcessInfo {
+            pid: 1234,
+            name: "WeChat.exe".to_string(),
+            is_main_process: true,
+            is_64_bit: true,
+            path: PathBuf::from("C:\\Program Files\\WeChat\\WeChat.exe"),
+            version: WeChatVersion::V4x { exact: "4.0.0.0".to_string() },
+            data_dir: Some(PathBuf::from("B:\\xwechat_files\\wxid_acglnhh5lp3l21_36f6")),
+            detected_at: Utc::now(),
+        };
+
+        assert_eq!(process_info.get_current_wxid(), Some("wxid_acglnhh5lp3l21".to_string()));
+
+        // 测试没有后缀的情况
+        process_info.data_dir = Some(PathBuf::from("B:\\xwechat_files\\wxid_acglnhh5lp3l21"));
+        assert_eq!(process_info.get_current_wxid(), Some("wxid_acglnhh5lp3l21".to_string()));
+
+        // 测试 data_dir 为 None 的情况
+        process_info.data_dir = None;
+        assert_eq!(process_info.get_current_wxid(), None);
+
+        // 测试不是 wxid_ 开头的情况
+        process_info.data_dir = Some(PathBuf::from("B:\\xwechat_files\\other_directory"));
+        assert_eq!(process_info.get_current_wxid(), None);
+
+        // 测试路径不包含 wxid 目录的情况
+        process_info.data_dir = Some(PathBuf::from("B:\\xwechat_files"));
+        assert_eq!(process_info.get_current_wxid(), None);
     }
 }
