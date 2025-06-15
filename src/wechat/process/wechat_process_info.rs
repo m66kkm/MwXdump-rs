@@ -1,5 +1,5 @@
 
-use crate::errors::MwxDumpError;
+use crate::errors::WeChatError;
 use crate::errors::SystemError;
 use crate::errors::Result;
 use crate::utils::ProcessInfo;
@@ -22,6 +22,8 @@ pub struct WechatProcessInfo {
     pub pid: u32,
     /// 进程名称
     pub name: String,
+    /// 是否为主进程
+    pub is_main_process: bool,
     /// 可执行文件路径
     pub path: PathBuf,
     /// 微信版本
@@ -71,9 +73,30 @@ impl WechatProcessInfo {
         // 2. 处理版本：解析可选的版本字符串。
         // 如果版本字符串是 None，我们可以默认为 Unknown。
         // 如果是 Some，我们就尝试解析它。
+        // let version = match process_info.version {
+        //     Some(v_str) => v_str.parse::<WeChatVersion>()?, // '?' 会自动传递 ConversionError
+        //     None => WeChatVersion::Unknown,                 // 或者如果未知版本不允许，就返回错误
+        // };
+
         let version = match process_info.version {
-            Some(v_str) => v_str.parse::<WeChatVersion>()?, // '?' 会自动传递 ConversionError
-            None => WeChatVersion::Unknown,                 // 或者如果未知版本不允许，就返回错误
+            Some(v_str) => {
+                // 首先，尝试解析版本字符串
+                let parsed_version = v_str.parse::<WeChatVersion>()?;
+
+                // 接着，检查解析后的版本是否是 V3x
+                match parsed_version {
+                    // 如果是 V3x，则返回不支持的版本错误
+                    WeChatVersion::V3x { exact } => {
+                        return Err(WeChatError::UnsupportedVersion { version: exact }.into());
+                    }
+                    // 如果是 V4x 或其他可接受的版本，则继续
+                    v @ WeChatVersion::V4x { .. } => v,
+                    // Unknown 理论上不会从 parse 产生，但为了代码健壮性，我们处理它
+                    WeChatVersion::Unknown => WeChatVersion::Unknown,
+                }
+            }
+            // 如果版本字符串不存在，则默认为 Unknown
+            None => WeChatVersion::Unknown,
         };
 
         // 3. 组装新的结构体
@@ -81,6 +104,7 @@ impl WechatProcessInfo {
             // 尽可能地从 process_info 直接移动（move）值，以提高效率
             pid: process_info.pid,
             name: process_info.name, // name 是 String，可以直接移动
+            is_main_process:process_info.is_main_process,
             path,
             version,
             // 初始化源结构体中不存在的字段

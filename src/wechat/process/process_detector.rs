@@ -1,7 +1,5 @@
 
-use crate::wechat::WeChatVersion;
 use async_trait::async_trait;
-use std::path::PathBuf;
 use super::wechat_process_info::WechatProcessInfo;
 use crate::errors::Result;
 

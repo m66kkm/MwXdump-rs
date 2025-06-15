@@ -29,6 +29,7 @@ pub async fn execute(context: &ExecutionContext) -> Result<()> {
         for (i, process) in processes.iter().enumerate() {
             eprintln!("  {}. 进程名: {}", i + 1, process.name);
             eprintln!("     PID: {}", process.pid);
+            eprintln!("     是否主进程: {}", process.is_main_process);
             eprintln!("     路径: {:?}", process.path);
             eprintln!("     版本: {:?}", process.version);
             if let Some(data_dir) = &process.data_dir {
