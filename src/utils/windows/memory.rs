@@ -36,7 +36,7 @@ use windows::{
 
 // --- 公共类型和常量 ---
 
-pub type Result<T> = crate::Result<T>;
+use crate::errors::Result;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ModuleInfo {

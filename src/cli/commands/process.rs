@@ -32,8 +32,11 @@ pub async fn execute(context: &ExecutionContext) -> Result<()> {
             eprintln!("     是否主进程: {}", process.is_main_process);
             eprintln!("     路径: {:?}", process.path);
             eprintln!("     版本: {:?}", process.version);
+            
             if let Some(data_dir) = &process.data_dir {
                 eprintln!("     数据目录: {:?}", data_dir);
+                eprintln!("     微信ID: {}", process.get_current_wxid().unwrap_or("未找到".to_string()));
+            
             } else {
                 eprintln!("     数据目录: 未找到");
             }
@@ -44,34 +47,6 @@ pub async fn execute(context: &ExecutionContext) -> Result<()> {
             eprintln!();
         }
     }
-
-    // match detector.detect_processes().await {
-    //     Ok(processes) => {
-    //         if processes.is_empty() {
-    //             eprintln!("✅ 进程检测功能正常，但未发现运行中的微信进程");
-    //         } else {
-    //             eprintln!("✅ 检测到 {} 个微信进程:", processes.len());
-    //             for (i, process) in processes.iter().enumerate() {
-    //                 eprintln!("  {}. 进程名: {}", i + 1, process.name);
-    //                 eprintln!("     PID: {}", process.pid);
-    //                 eprintln!("     路径: {:?}", process.path);
-    //                 eprintln!("     版本: {:?}", process.version);
-    //                 if let Some(data_dir) = &process.data_dir {
-    //                     eprintln!("     数据目录: {:?}", data_dir);
-    //                 } else {
-    //                     eprintln!("     数据目录: 未找到");
-    //                 }
-    //                 eprintln!("     检测时间: {}", process.detected_at.format("%Y-%m-%d %H:%M:%S"));
-    //                 eprintln!();
-    //             }
-    //         }
-    //     }
-    //     Err(e) => {
-    //         eprintln!("❌ 进程检测失败: {}", e);
-    //         return Err(e);
-    //     }
-    // }
-
     eprintln!("进程检测测试完成！");
     Ok(())
 }

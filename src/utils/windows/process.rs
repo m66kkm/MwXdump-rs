@@ -33,9 +33,15 @@ use std::collections::HashSet;
 use super::handler::Handle;
 
 
-/// 列举系统中的所有进程，并根据过滤器返回匹配的进程信息。
-// 重构后的 list_processes 函数
-pub fn list_processes(filter: &[&str]) -> Result<Vec<ProcessInfo>> {
+/// 列举系统中的所有进程，并根据过滤器和选项返回匹配的进程信息。
+///
+/// # 参数
+///
+/// * `filter` - 进程名称过滤器数组
+/// * `main_process_only` - 是否只返回主进程，默认为 false
+///   - `true`: 只返回主进程（没有父进程在结果集中的进程）
+///   - `false`: 返回所有匹配的进程（主进程和子进程）
+pub fn list_processes(filter: &[&str], main_process_only: bool) -> Result<Vec<ProcessInfo>> {
     let mut processes = Vec::new();
     let snapshot = Handle::new(unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)? })?;
 
@@ -111,6 +117,11 @@ pub fn list_processes(filter: &[&str]) -> Result<Vec<ProcessInfo>> {
                 process.is_main_process = true;
             }
         }        
+    }
+    
+    // 根据 main_process_only 参数过滤结果
+    if main_process_only {
+        processes.retain(|p| p.is_main_process);
     }
     
     Ok(processes)
@@ -291,4 +302,49 @@ impl ProcessArchitecture {
     pub fn is_64_bit(&self) -> bool {
         *self == ProcessArchitecture::Bit64
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_list_processes_with_options_signature() {
+        // 测试新函数的签名和基本调用
+        // 使用一个不太可能存在的进程名来避免权限问题
+        let result1 = list_processes(&["nonexistent_process.exe"], false);
+        let result2 = list_processes(&["nonexistent_process.exe"], true);
+        
+        // 两个调用都应该成功（即使返回空列表）
+        match (result1, result2) {
+            (Ok(all), Ok(main)) => {
+                println!("✅ list_processes_with_options 函数签名正确");
+                println!("所有进程: {} 个, 主进程: {} 个", all.len(), main.len());
+                
+                // 主进程数量应该小于等于总进程数量
+                assert!(main.len() <= all.len(), "主进程数量应该小于等于总进程数量");
+                
+                // 所有返回的主进程都应该标记为主进程
+                for process in &main {
+                    assert!(process.is_main_process, "返回的进程应该是主进程");
+                }
+            }
+            (Err(e1), _) => {
+                println!("⚠️ list_processes_with_options(false) 失败: {}", e1);
+            }
+            (_, Err(e2)) => {
+                println!("⚠️ list_processes_with_options(true) 失败: {}", e2);
+            }
+        }
+    }
+
+    #[test]
+    fn test_process_architecture() {
+        let arch_32 = ProcessArchitecture::Bit32;
+        let arch_64 = ProcessArchitecture::Bit64;
+        
+        assert!(!arch_32.is_64_bit());
+        assert!(arch_64.is_64_bit());
+    }
+
 }

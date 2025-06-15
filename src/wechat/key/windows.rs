@@ -11,7 +11,7 @@ use tracing::info;
 #[cfg(target_os = "windows")]
 pub mod memory;
 #[cfg(target_os = "windows")]
-pub mod v4;
+pub mod key_extractor_v4;
 #[cfg(target_os = "windows")]
 pub mod validator;
 #[cfg(target_os = "windows")]
@@ -61,7 +61,7 @@ impl KeyExtractor for WindowsKeyExtractor {
             KeyVersion::V40 => {
                 #[cfg(target_os = "windows")]
                 {
-                    let extractor = v4::V4KeyExtractor::new()?;
+                    let extractor = key_extractor_v4::KeyExtractorV4::new()?;
                     extractor.extract_key(process).await
                 }
                 #[cfg(not(target_os = "windows"))]
@@ -75,14 +75,14 @@ impl KeyExtractor for WindowsKeyExtractor {
         }
     }
 
-    async fn search_key_in_memory(&self, memory: &[u8]) -> Result<Option<Vec<u8>>> {
+    async fn search_key_in_memory(&self, memory: &[u8], process: &WechatProcessInfo) -> Result<Option<Vec<u8>>> {
         match self.version {
             KeyVersion::V3x => Ok(None),
             KeyVersion::V40 => {
                 #[cfg(target_os = "windows")]
                 {
-                    let extractor = v4::V4KeyExtractor::new()?;
-                    extractor.search_key_in_memory(memory).await
+                    let extractor = key_extractor_v4::KeyExtractorV4::new()?;
+                    extractor.search_key_in_memory(memory, process).await
                 }
                 #[cfg(not(target_os = "windows"))]
                 {

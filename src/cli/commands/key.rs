@@ -59,16 +59,6 @@ pub async fn execute(context: &ExecutionContext) -> Result<()> {
         let key_version = wechat::key::KeyVersion::from_process(process);
         println!("   推断的密钥版本: {:?}", key_version);
         
-        // 显示算法选择逻辑
-        match key_version {
-            wechat::key::KeyVersion::V3x => {
-                println!("   🔧 将使用V3算法 (搜索WeChatWin.dll模块)");
-            }
-            wechat::key::KeyVersion::V40 => {
-                println!("   🔧 将使用V4算法 (搜索私有内存区域)");
-            }
-        }
-        
         match wechat::key::create_key_extractor(key_version) {
             Ok(extractor) => {
                 println!("   ✅ 密钥提取器创建成功");

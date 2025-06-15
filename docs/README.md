@@ -12,6 +12,7 @@
 - [`phase2-architecture.md`](./phase2-architecture.md) - 第二阶段架构设计
 - [`cli-options-architecture.md`](./cli-options-architecture.md) - CLI选项架构设计
 - [`version-support-policy.md`](./version-support-policy.md) - 微信版本支持策略
+- [`wechat-data-directory-enhancement.md`](./wechat-data-directory-enhancement.md) - 微信数据目录查找功能增强方案
 
 ### 📊 项目规划文档
 - [`phase2-plan.md`](./phase2-plan.md) - 第二阶段详细计划
@@ -24,6 +25,7 @@
 - [`milestone-report.md`](./milestone-report.md) - 里程碑报告：第二阶段进程检测模块
 - [`phase2-progress.md`](./phase2-progress.md) - 第二阶段进展跟踪
 - [`wechat-process-refactor-completion.md`](./wechat-process-refactor-completion.md) - 微信进程重构完成报告
+- [`wechat-data-directory-enhancement-completion.md`](./wechat-data-directory-enhancement-completion.md) - 微信数据目录查找功能增强完成报告
 
 ### 🔧 技术分析文档
 - [`decrypt-analysis.md`](./decrypt-analysis.md) - 解密功能技术分析
