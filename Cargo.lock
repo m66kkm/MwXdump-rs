@@ -16,6 +16,7 @@ dependencies = [
  "chrono",
  "clap",
  "config",
+ "crossbeam-channel",
  "crossterm 0.29.0",
  "dirs",
  "flate2",
