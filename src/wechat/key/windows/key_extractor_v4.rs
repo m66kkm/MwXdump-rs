@@ -9,25 +9,16 @@ use crate::wechat::process::WechatProcessInfo;
 use crate::utils::windows::memory;
 
 use async_trait::async_trait;
-use std::ops::Deref;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 use tokio::task;
 
-use windows::Win32::{
-    Foundation::HANDLE,
-    System::{
-        Diagnostics::Debug::ReadProcessMemory,
-        Memory::{
-            VirtualQueryEx, MEMORY_BASIC_INFORMATION, MEM_COMMIT, MEM_PRIVATE, PAGE_EXECUTE_READ,
-            PAGE_EXECUTE_READWRITE, PAGE_PROTECTION_FLAGS, PAGE_READONLY, PAGE_READWRITE,
-        },
-        Threading::{
-            OpenProcess, PROCESS_ACCESS_RIGHTS, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
-        },
-    },
+use windows::Win32::System::{
+    Diagnostics::Debug::ReadProcessMemory,
+    Memory::{VirtualQueryEx, MEMORY_BASIC_INFORMATION, MEM_COMMIT, MEM_PRIVATE, PAGE_READWRITE},
+    Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
 };
 
 // --- 常量定义 ---
@@ -72,11 +63,6 @@ impl KeyExtractorV4 {
         Ok(None)
     }
 
-    /// 核心同步实现(验证逻辑)
-    fn _validate_key_impl(&self, key: &[u8]) -> bool {
-        key.len() == KEY_SIZE && !key.iter().all(|&b| b == 0)
-    }
-
     /// 核心同步实现(总指挥)
     fn _extract_key_impl(&self, process: &WechatProcessInfo) -> Result<WeChatKey> {
         // 创建跨线程通道
@@ -96,7 +82,7 @@ impl KeyExtractorV4 {
 
         // 启动 Worker 线程
         let worker_count = num_cpus::get().max(2);
-        tracing::debug!("[KeyExtractorV4] 启动 {} workers...", worker_count);
+        tracing::debug!("启动 {} workers...", worker_count);
         let mut worker_handles = Vec::new();
         for i in 0..worker_count {
             let receiver = mem_receiver.clone();
@@ -129,8 +115,7 @@ impl KeyExtractorV4 {
         // 我们在 worker 中有克隆，所以在这里 drop 不会立即关闭
         drop(result_sender);
 
-        // 启动 Producer 线程
-        println!("[Main] Starting producer...");
+        tracing::debug!("启动 Producer 线程");
         let producer_stop_signal = Arc::clone(&stop_signal);
         let producer_handle = thread::Builder::new()
             .name("producer".to_string())
@@ -141,16 +126,14 @@ impl KeyExtractorV4 {
 
         // 等待生产者完成
         producer_handle.join().expect("Producer thread panicked");
-        println!("[Main] Producer finished.");
+        tracing::debug!("密钥Producer 线程执行结束.");
 
         // 等待所有 worker 完成
         for handle in worker_handles {
             handle.join().expect("Worker thread panicked");
         }
-        println!("[Main] All workers finished.");
+        tracing::debug!("所有密钥搜寻结束.");
 
-        // 获取结果
-        println!("[Main] Retrieving result...");
         if let Ok(key_hex) = result_receiver.try_recv() {
             // 成功找到密钥
             let key_data = hex::decode(&key_hex)
@@ -180,16 +163,11 @@ impl KeyExtractorV4 {
         let process_handle = match Handle::new(unsafe {
             match OpenProcess(PROCESS_VM_READ, false, pid) {
                 Ok(h) => h,
-                Err(e) => return Err(anyhow::anyhow!("[Worker] Failed to open process: {}", e)),
+                Err(e) => return Err(anyhow::anyhow!("进程打开失败: {}", e)),
             }
         }) {
             Ok(h) => h,
-            Err(e) => {
-                return Err(anyhow::anyhow!(
-                    "[Worker] Failed to create handle wrapper: {}",
-                    e
-                ))
-            }
+            Err(e) => return Err(anyhow::anyhow!("Windows Handler创建失败: {}", e)),
         };
 
         let ptr_size = std::mem::size_of::<usize>();
@@ -219,48 +197,78 @@ impl KeyExtractorV4 {
                                 return Ok(());
                             }
 
-                            // 调用简化的验证函数
-                            match KeyExtractorV4::validate_key_impl(
-                                *process_handle, 
-                                ptr_value,
-                                Arc::clone(&stop_signal), // 传递停止信号
-                            ) {
-                                Some(key) => {
-                                    // 成功路径：在worker层面处理统计
-                                    let validation_order = success_counter.fetch_add(1, Ordering::SeqCst);
-                                    
-                                    // 如果这不是第一个成功的验证，则不处理
-                                    if validation_order > 0 {
+                            // 在调用验证函数前先从内存读取 key
+                            let mut key_data = vec![0u8; KEY_SIZE];
+                            let mut bytes_read = 0;
+                            let read_result = unsafe {
+                                ReadProcessMemory(
+                                    *process_handle,
+                                    ptr_value as *const _,
+                                    key_data.as_mut_ptr() as *mut _,
+                                    KEY_SIZE,
+                                    Some(&mut bytes_read),
+                                )
+                            };
+
+                            if read_result.is_ok() && bytes_read == KEY_SIZE {
+                                // 调用修改后的验证函数
+                                match KeyExtractorV4::validate_key_impl(
+                                    &key_data,
+                                    Some(Arc::clone(&stop_signal)), // 传递停止信号，包装在Some中
+                                ) {
+                                    Some(key) => {
+                                        // 成功路径：在worker层面处理统计
+                                        let validation_order =
+                                            success_counter.fetch_add(1, Ordering::SeqCst);
+
+                                        // 如果这不是第一个成功的验证，则不处理
+                                        if validation_order > 0 {
+                                            return Ok(());
+                                        }
+
+                                        tracing::info!(
+                                            "🎉 成功~！  第 {} 个成功信息. 地址位于: {:#X}.",
+                                            validation_order + 1,
+                                            ptr_value
+                                        );
+
+                                        tracing::info!(
+                                            "目前失败次数: {}.\n",
+                                            failure_counter.load(Ordering::Relaxed)
+                                        );
+                                        tracing::debug!("密钥验证成功，发起停止其他线程动作信号");
+                                        // 使用SeqCst确保所有线程立即看到更新
+                                        stop_signal.store(true, Ordering::SeqCst);
+                                        let _ = sender.try_send(key);
+
+                                        // 清空接收队列中的所有剩余内存块
+                                        while receiver.try_recv().is_ok() {}
                                         return Ok(());
                                     }
-                                    
-                                    println!(
-                                        "\n🎉 [Validator] SUCCESS! No.{} success. Failures so far: {}. Addr: {:#X}\n",
-                                        validation_order + 1,
-                                        failure_counter.load(Ordering::Relaxed),
-                                        ptr_value
-                                    );
-                                    
-                                    println!("[Worker] Correct key validated! Raising stop signal.");
-                                    // 使用SeqCst确保所有线程立即看到更新
-                                    stop_signal.store(true, Ordering::SeqCst);
-                                    let _ = sender.try_send(key);
+                                    None => {
+                                        // 失败路径：在worker层面处理统计
+                                        let total_failures =
+                                            failure_counter.fetch_add(1, Ordering::Relaxed);
 
-                                    // 清空接收队列中的所有剩余内存块
-                                    while receiver.try_recv().is_ok() {}
-                                    return Ok(());
-                                }
-                                None => {
-                                    // 失败路径：在worker层面处理统计
-                                    let total_failures = failure_counter.fetch_add(1, Ordering::Relaxed);
-                                    
-                                    // 为了避免日志刷屏，我们可以选择性地打印，比如每10次失败打印一次
-                                    if (total_failures + 1) % 10 == 0 {
-                                        println!(
-                                            "[Validator] Mismatch... Total failures reached: {}",
-                                            total_failures + 1
-                                        );
+                                        // 为了避免日志刷屏，我们可以选择性地打印，比如每10次失败打印一次
+                                        if (total_failures + 1) % 10 == 0 {
+                                            tracing::debug!(
+                                                "微信密钥验证失败，总计失败 {}次",
+                                                total_failures + 1
+                                            );
+                                        }
                                     }
+                                }
+                            } else {
+                                // 内存读取失败，记录为一次失败
+                                let total_failures =
+                                    failure_counter.fetch_add(1, Ordering::Relaxed);
+                                if (total_failures + 1) % 10 == 0 {
+                                    tracing::debug!(
+                                        "内存在 {:#X} 位置读取失败. 总计失败次数: {}",
+                                        ptr_value,
+                                        total_failures + 1
+                                    );
                                 }
                             }
                         }
@@ -277,12 +285,11 @@ impl KeyExtractorV4 {
         sender: crossbeam_channel::Sender<Vec<u8>>,
         stop_signal: Arc<AtomicBool>,
     ) {
-        println!("[Producer] Started.");
         let handle =
             match unsafe { OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, false, pid) } {
                 Ok(h) => h,
                 Err(e) => {
-                    eprintln!("[Producer] Error: Failed to open process handle: {:?}", e);
+                    tracing::debug!("Windows Handler创建失败: {:?}", e);
                     return;
                 }
             };
@@ -290,7 +297,7 @@ impl KeyExtractorV4 {
         let _handle = match Handle::new(handle) {
             Ok(h) => h,
             Err(e) => {
-                eprintln!("[Producer] Error: Failed to create handle wrapper: {:?}", e);
+                tracing::debug!("Windows Handler创建失败: {:?}", e);
                 return;
             }
         };
@@ -303,14 +310,11 @@ impl KeyExtractorV4 {
         };
         let mut current_addr = min_addr;
 
-        println!(
-            "[Producer] Starting memory scan from {:#X} to {:#X}",
-            min_addr, max_addr
-        );
+        tracing::debug!("开始从 {:#X} 到 {:#X} 进行内存搜索", min_addr, max_addr);
         while current_addr < max_addr {
             // 关键优化：检查停止信号，使用SeqCst内存顺序以确保更快的信号传播
             if stop_signal.load(Ordering::SeqCst) {
-                println!("[Producer] Stop signal received. Halting memory scan.");
+                tracing::debug!("获取停止信号，停止内存搜索");
                 break;
             }
 
@@ -324,7 +328,7 @@ impl KeyExtractorV4 {
                 )
             } == 0
             {
-                println!("[Producer] VirtualQueryEx finished or failed. Exiting scan loop.");
+                tracing::debug!("VirtualQueryEx 完成或者失败，退出搜索");
                 break;
             }
 
@@ -337,7 +341,7 @@ impl KeyExtractorV4 {
             {
                 // 再次检查停止信号，避免在读取大内存区域前浪费时间
                 if stop_signal.load(Ordering::SeqCst) {
-                    println!("[Producer] Stop signal received before memory read. Halting scan.");
+                    tracing::debug!("开始读取内存区域前获取停止信号，停止内存搜索");
                     break;
                 }
 
@@ -357,16 +361,12 @@ impl KeyExtractorV4 {
                 {
                     // 读取内存后再次检查停止信号
                     if stop_signal.load(Ordering::SeqCst) {
-                        println!(
-                            "[Producer] Stop signal received after memory read. Halting scan."
-                        );
                         break;
                     }
 
                     buffer.truncate(bytes_read);
                     if sender.send(buffer).is_err() {
                         // 如果发送失败，说明 workers 已经全部退出，也意味着可以停止了
-                        println!("[Producer] Workers' channel closed. Stopping early.");
                         break;
                     }
                 }
@@ -374,46 +374,40 @@ impl KeyExtractorV4 {
 
             let next_addr = (mem_info.BaseAddress as usize).saturating_add(region_size);
             if next_addr <= current_addr {
-                eprintln!("[Producer] Error: Address not advancing! current: {:#X}, next: {:#X}. Breaking.", current_addr, next_addr);
+                tracing::debug!(
+                    "地址错误 当前: {:#X}, 下一步: {:#X}.",
+                    current_addr,
+                    next_addr
+                );
                 break;
             }
             current_addr = next_addr;
         }
-        println!("[Producer] Memory scan finished. Closing sender channel.");
+        tracing::debug!("内存搜索结束，关闭发送信道");
     }
 
     fn validate_key_impl(
-        handle: HANDLE, // 直接接收 HANDLE 值
-        addr: usize,
-        stop_signal: Arc<AtomicBool>, // 停止信号参数
+        key: &[u8],
+        stop_signal: Option<Arc<AtomicBool>>, // 停止信号参数，现在是可选的
     ) -> Option<String> {
         // 在验证前先检查停止信号，如果已经设置了停止信号，则不再验证
-        if stop_signal.load(Ordering::SeqCst) {
-            return None;
+        if let Some(signal) = &stop_signal {
+            if signal.load(Ordering::SeqCst) {
+                return None;
+            }
         }
 
         const TARGET_KEY: &str = "4ced5efc9ecc4b818d16ee782a6d4d2eda3f25a030b143a1aff93a0d322c920b";
 
-        let mut key_data = vec![0u8; 32];
-        let mut bytes_read = 0;
-        let result = unsafe {
-            ReadProcessMemory(
-                handle,
-                addr as *const _,
-                key_data.as_mut_ptr() as *mut _,
-                32,
-                Some(&mut bytes_read),
-            )
-        };
-
-        if result.is_ok() && bytes_read == 32 {
-            let found_key_str = hex::encode(&key_data);
+        // 检查 key 的长度是否正确
+        if key.len() == 32 {
+            let found_key_str = hex::encode(key);
             if found_key_str == TARGET_KEY {
-                // 成功路径：直接返回找到的key，不进行统计
+                tracing::info!("🎉 成功获取密钥信息. 密钥为: {}.", found_key_str);
                 return Some(found_key_str);
             }
         }
-        
+
         // 失败路径：直接返回None，不进行统计
         None
     }
@@ -443,7 +437,7 @@ impl KeyExtractor for KeyExtractorV4 {
     }
 
     async fn validate_key(&self, key: &[u8]) -> Result<bool> {
-        Ok(self._validate_key_impl(key))
+        Ok(Self::validate_key_impl(key, None).is_some())
     }
 
     fn supported_version(&self) -> KeyVersion {

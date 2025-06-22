@@ -44,9 +44,9 @@ pub async fn execute(context: &ExecutionContext) -> Result<()> {
     // tracing::info!("create key extractor: {}", );
 
     for process in valid_main_processes.iter() {
-        tracing::info!("extract wechat key of pid: {} ", process.pid);
+        tracing::info!("获取微信进程: {} 的加密密钥", process.pid);
         let key = key_extractor.extract_key(process).await?;
-        tracing::info!("dddddddddddddd{}", key);
+        tracing::info!("密钥获取成功：{}", key);
     }
     
     // let mut success_count = 0;

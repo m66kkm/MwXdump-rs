@@ -70,7 +70,60 @@ async fn main() -> Result<()> {
 
 fn init_tracing(context: &cli::context::ExecutionContext) -> Result<()> {
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, fmt};
+    use tracing_subscriber::fmt::time::FormatTime;
     use std::fs;
+    use std::fmt::Write;
+    
+    // 自定义时间格式器
+    struct CustomTimeFormat;
+    
+    impl FormatTime for CustomTimeFormat {
+        fn format_time(&self, w: &mut tracing_subscriber::fmt::format::Writer<'_>) -> std::fmt::Result {
+            let now = chrono::Local::now();
+            write!(w, "{}", now.format("%y/%m/%d %H:%M:%S"))
+        }
+    }
+    
+    // 自定义格式化器，用于简化 target 显示
+    struct CustomFormat;
+    
+    impl<S, N> tracing_subscriber::fmt::FormatEvent<S, N> for CustomFormat
+    where
+        S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+        N: for<'a> tracing_subscriber::fmt::FormatFields<'a> + 'static,
+    {
+        fn format_event(
+            &self,
+            ctx: &tracing_subscriber::fmt::FmtContext<'_, S, N>,
+            mut writer: tracing_subscriber::fmt::format::Writer<'_>,
+            event: &tracing::Event<'_>,
+        ) -> std::fmt::Result {
+            let metadata = event.metadata();
+            
+            // 格式化时间
+            CustomTimeFormat.format_time(&mut writer)?;
+            write!(writer, " ")?;
+            
+            // 格式化日志级别
+            write!(writer, "{:5}", metadata.level())?;
+            
+            // 格式化简化的 target（只显示最后一部分）
+            let target = metadata.target();
+            let short_target = target.split("::").last().unwrap_or(target);
+            write!(writer, "[{}] ", short_target)?;
+            
+            // // 格式化文件和行号
+            // if let (Some(file), Some(line)) = (metadata.file(), metadata.line()) {
+            //     let filename = file.split(['/', '\\']).last().unwrap_or(file);
+            //     write!(writer, "[{}:{}] ", filename, line)?;
+            // }
+            
+            // 格式化消息
+            ctx.field_format().format_fields(writer.by_ref(), event)?;
+            
+            writeln!(writer)
+        }
+    }
     
     let logging_config = context.logging_config();
     let env_filter = format!("{}={}", context.log_level(), context.log_level());
@@ -98,14 +151,18 @@ fn init_tracing(context: &cli::context::ExecutionContext) -> Result<()> {
                 .map_err(|e| anyhow::anyhow!("打开日志文件失败: {}", e))?;
             
             registry
-                .with(fmt::layer().with_target(false))
-                .with(fmt::layer().with_writer(file).with_target(true))
+                .with(fmt::layer()
+                    .event_format(CustomFormat))
+                .with(fmt::layer()
+                    .with_writer(file)
+                    .event_format(CustomFormat))
                 .init();
         }
         (true, None) => {
             // 仅输出到控制台
             registry
-                .with(fmt::layer().with_target(false))
+                .with(fmt::layer()
+                    .event_format(CustomFormat))
                 .init();
         }
         (false, Some(log_file_path)) => {
@@ -124,13 +181,16 @@ fn init_tracing(context: &cli::context::ExecutionContext) -> Result<()> {
                 .map_err(|e| anyhow::anyhow!("打开日志文件失败: {}", e))?;
             
             registry
-                .with(fmt::layer().with_writer(file).with_target(true))
+                .with(fmt::layer()
+                    .with_writer(file)
+                    .event_format(CustomFormat))
                 .init();
         }
         (false, None) => {
             // 默认输出到控制台
             registry
-                .with(fmt::layer().with_target(false))
+                .with(fmt::layer()
+                    .event_format(CustomFormat))
                 .init();
         }
     }
