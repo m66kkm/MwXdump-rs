@@ -5,23 +5,16 @@
 
 use std::{
     ffi::c_void,
-    ops::{Deref, DerefMut},
     // FIX: 导入 LazyLock 用于懒初始化 static 变量
     sync::LazyLock,
 };
 
-use anyhow::bail;
 use windows::{
-    core::PCWSTR,
     Win32::{
-        Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE},
+        Foundation::HANDLE,
         System::{
             Diagnostics::{
                 Debug::ReadProcessMemory,
-                ToolHelp::{
-                    CreateToolhelp32Snapshot, Module32FirstW, Module32NextW, MODULEENTRY32W,
-                    TH32CS_SNAPMODULE, TH32CS_SNAPMODULE32,
-                },
             },
             Memory::{
                 VirtualQueryEx, MEMORY_BASIC_INFORMATION, MEM_COMMIT, PAGE_EXECUTE_READ,
@@ -37,13 +30,7 @@ use windows::{
 // --- 公共类型和常量 ---
 
 use crate::errors::Result;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ModuleInfo {
-    pub base_address: usize,
-    pub size: usize,
-}
-
+use super::handle::Handle;
 const SCAN_BUFFER_SIZE: usize = 4096 * 2;
 
 // FIX: 使用 LazyLock 来包装 static 变量。
@@ -57,39 +44,6 @@ static READABLE_PAGE_PROTECTIONS: LazyLock<PAGE_PROTECTION_FLAGS> = LazyLock::ne
     PAGE_READONLY | PAGE_READWRITE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE
 });
 
-// --- 私有 RAII 句柄包装器 ---
-#[derive(Debug)]
-struct Handle(HANDLE);
-
-impl Handle {
-    fn new(handle: HANDLE) -> Result<Self> {
-        if handle.is_invalid() || handle == INVALID_HANDLE_VALUE {
-            Err(windows::core::Error::from_win32().into())
-        } else {
-            Ok(Self(handle))
-        }
-    }
-}
-
-impl Drop for Handle {
-    fn drop(&mut self) {
-        if !self.0.is_invalid() {
-            unsafe { CloseHandle(self.0) };
-        }
-    }
-}
-
-impl Deref for Handle {
-    type Target = HANDLE;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl DerefMut for Handle {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
 
 // --- 核心内存操作函数 ---
 
@@ -121,34 +75,6 @@ fn read_process_memory_with_handle(
     Ok(buffer)
 }
 
-pub fn get_module_info(pid: u32, module_name: &str) -> Result<ModuleInfo> {
-    let snapshot_handle = Handle::new(unsafe {
-        CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid)?
-    })?;
-
-    let mut module_entry = MODULEENTRY32W::default();
-    module_entry.dwSize = std::mem::size_of::<MODULEENTRY32W>() as u32;
-
-    unsafe { Module32FirstW(*snapshot_handle, &mut module_entry)? };
-
-    loop {
-        let current_module_name = module_name_from_entry(&module_entry)?;
-        if current_module_name.eq_ignore_ascii_case(module_name) {
-            return Ok(ModuleInfo {
-                base_address: module_entry.modBaseAddr as usize,
-                size: module_entry.modBaseSize as usize,
-            });
-        }
-        if unsafe { Module32NextW(*snapshot_handle, &mut module_entry) }.is_err() {
-            break;
-        }
-    }
-
-    bail!(crate::errors::SystemError::ModuleInfoMissing {
-        value: module_name.to_string(),
-        pid,
-    });
-}
 
 pub fn search_memory_for_pattern(
     pid: u32,
@@ -244,6 +170,8 @@ pub fn search_memory_for_pattern(
 }
 // In your memory.rs file
 
+use super::module_info;
+
 pub fn search_module_for_pattern(
     pid: u32,
     module_name: &str,
@@ -260,7 +188,7 @@ pub fn search_module_for_pattern(
     );
 
     // 1. 获取模块的边界信息
-    let module_info = get_module_info(pid, module_name)?;
+    let module_info = module_info::get_module_info(pid, module_name)?;
     let start_address = module_info.base_address;
     let end_address = start_address.saturating_add(module_info.size);
 
@@ -273,7 +201,7 @@ pub fn search_module_for_pattern(
 
     // 2. 调用更底层的、逐个内存区域扫描的函数。
     // 这个函数能够处理模块内部可能存在的不可读内存页。
-    let found_addresses =
+    let found_addresses: Vec<usize> =
         search_memory_for_pattern(pid, pattern, start_address, end_address, max_occurrences)?;
 
     tracing::info!(
@@ -284,8 +212,3 @@ pub fn search_module_for_pattern(
     Ok(found_addresses)
 }
 
-// --- 私有辅助函数 ---
-
-fn module_name_from_entry(entry: &MODULEENTRY32W) -> Result<String> {
-    Ok(unsafe { PCWSTR::from_raw(entry.szModule.as_ptr()).to_string()? })
-}
