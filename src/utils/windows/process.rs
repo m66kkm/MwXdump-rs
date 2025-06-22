@@ -32,7 +32,6 @@ use windows::{
 use std::collections::HashSet;
 use super::handler::Handle;
 
-
 /// 列举系统中的所有进程，并根据过滤器和选项返回匹配的进程信息。
 ///
 /// # 参数
@@ -128,11 +127,11 @@ pub fn list_processes(filter: &[&str], main_process_only: bool) -> Result<Vec<Pr
 }
 
 /// 根据已打开的进程句柄获取其可执行文件的完整路径。
-pub fn get_process_exe_path_by_handle(process: &Handle) -> Result<String> {
+pub fn get_process_exe_path_by_handle(handle: &Handle) -> Result<String> {
     const MAX_PATH_LEN: usize = 1024;
     let mut exe_path_buffer: Vec<u16> = vec![0; MAX_PATH_LEN];
 
-    let len = unsafe { GetModuleFileNameExW(Some(**process), None, &mut exe_path_buffer) };
+    let len = unsafe { GetModuleFileNameExW(Some(**handle), None, &mut exe_path_buffer) };
 
     if len == 0 {
         Err(windows::core::Error::from_win32().into())
@@ -141,10 +140,20 @@ pub fn get_process_exe_path_by_handle(process: &Handle) -> Result<String> {
     }
 }
 
+/// 根据 PID 获取其可执行文件的完整路径。
+pub fn get_process_exe_path(pid: u32) -> Result<String> {
+
+    let handle: Handle = Handle::new(unsafe {
+        OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid)?
+    })?;
+    get_process_exe_path_by_handle(&handle)
+}
+
+
 /// 根据已打开的进程句柄判断一个进程的体系结构（32位或64位）。
-pub fn get_process_architecture_by_handle(process: &Handle) -> Result<ProcessArchitecture> {
+pub fn get_process_architecture_by_handle(handle: &Handle) -> Result<ProcessArchitecture> {
     let mut is_wow64 = BOOL(0);
-    unsafe { IsWow64Process(**process, &mut is_wow64)? };
+    unsafe { IsWow64Process(**handle, &mut is_wow64)? };
 
     if is_wow64.as_bool() {
         return Ok(ProcessArchitecture::Bit32);
@@ -161,23 +170,12 @@ pub fn get_process_architecture_by_handle(process: &Handle) -> Result<ProcessArc
     }
 }
 
-/// 根据 PID 获取其可执行文件的完整路径。
-pub fn get_process_exe_path(pid: u32) -> Result<String> {
-    const MAX_PATH_LEN: usize = 1024;
-    let mut exe_path_buffer: Vec<u16> = vec![0; MAX_PATH_LEN];
-
-    let process = Handle::new(unsafe {
-        OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid)?
-    })?;
-
-    let len = unsafe { GetModuleFileNameExW(Some(*process), None, &mut exe_path_buffer) };
-
-    if len == 0 {
-        Err(windows::core::Error::from_win32().into())
-    } else {
-        Ok(String::from_utf16_lossy(&exe_path_buffer[..len as usize]))
-    }
+/// 判断一个进程的体系结构（32位或64位）。
+pub fn get_process_architecture(pid: u32) -> Result<ProcessArchitecture> {
+    let handle = Handle::new(unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)? })?;
+    get_process_architecture_by_handle(&handle)
 }
+
 
 /// 获取文件的版本信息字符串（例如 "1.2.3.4"）。
 pub fn get_file_version_info(exe_path: &str) -> Result<String> {
@@ -237,27 +235,7 @@ pub fn get_file_version_info(exe_path: &str) -> Result<String> {
     Ok(format!("{}.{}.{}.{}", major, minor, build, patch))
 }
 
-/// 判断一个进程的体系结构（32位或64位）。
-pub fn get_process_architecture(pid: u32) -> Result<ProcessArchitecture> {
-    let process = Handle::new(unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)? })?;
 
-    let mut is_wow64 = BOOL(0);
-    unsafe { IsWow64Process(*process, &mut is_wow64)? };
-
-    if is_wow64.as_bool() {
-        return Ok(ProcessArchitecture::Bit32);
-    }
-
-    let mut system_info = SYSTEM_INFO::default();
-    unsafe { GetNativeSystemInfo(&mut system_info) };
-
-    match unsafe { system_info.Anonymous.Anonymous.wProcessorArchitecture } {
-        PROCESSOR_ARCHITECTURE_AMD64 | PROCESSOR_ARCHITECTURE_IA64 | PROCESSOR_ARCHITECTURE_ARM64 => {
-            Ok(ProcessArchitecture::Bit64)
-        }
-        _ => Ok(ProcessArchitecture::Bit32),
-    }
-}
 
 /// 检查指定 PID 的进程是否仍在运行。
 pub fn is_process_running(pid: u32) -> bool {

@@ -67,7 +67,7 @@ impl super::WindowsProcessDetector {
             // 同样，检查目录是否存在并进行内存验证
             if candidate_dir.is_dir() && self.is_datadir_valid_in_memory(process, &candidate_dir)? {
                 tracing::info!(
-                    "PID {}: 通过 xwechat 配置找到并验证了数据目录: {:?}",
+                    "通过PID {}: 验证了数据目录: {:?} 有效",
                     process.pid,
                     candidate_dir
                 );
@@ -94,7 +94,7 @@ impl super::WindowsProcessDetector {
         let dir_str = match data_dir.to_str() {
             Some(s) => s,
             None => {
-                tracing::warn!(
+                tracing::debug!(
                     "PID {}: 数据目录路径 {:?} 包含无效UTF-8字符, 无法进行内存验证",
                     process.pid,
                     data_dir
@@ -119,7 +119,7 @@ impl super::WindowsProcessDetector {
             Ok(location) => {
                 if !location.is_empty() {
                     // 修复日志信息，并正确处理找到的情况
-                    tracing::info!(
+                    tracing::debug!(
                         "PID {}: 在内存中成功验证数据目录 '{}'，所在位置为: {:?}",
                         process.pid,
                         dir_str,
@@ -128,7 +128,7 @@ impl super::WindowsProcessDetector {
                     Ok(true) // 找到了，验证成功
                 } else {
                     // 修复未找到的逻辑
-                    tracing::info!(
+                    tracing::debug!(
                         "PID {}: 数据目录 '{}' 未在进程内存中找到，判定为无效",
                         process.pid,
                         dir_str
@@ -192,7 +192,7 @@ impl super::WindowsProcessDetector {
                     }
                 }
                 Err(e) => {
-                    tracing::warn!("读取 ini 文件失败 {:?}: {}", ini_file, e);
+                    tracing::debug!("读取 ini 文件失败 {:?}: {}", ini_file, e);
                 }
             }
         }
@@ -231,7 +231,7 @@ impl super::WindowsProcessDetector {
 
         // 如果找到了 wxid_ 目录，返回第一个
         if let Some(wxid_dir) = wxid_dirs.first() {
-            tracing::info!("找到有效的微信数据目录: {:?}", wxid_dir);
+            tracing::info!("通过xwechat_files，找到有效的微信数据目录: {:?}", wxid_dir);
             return Ok(Some(wxid_dir.clone()));
         }
 
@@ -244,7 +244,7 @@ impl super::WindowsProcessDetector {
 impl ProcessDetector for super::WindowsProcessDetector {
     async fn detect_processes(&self) -> Result<Vec<WechatProcessInfo>> {
         // &self 依然是 'life0
-        tracing::info!("调度阻塞任务：开始检测微信进程...");
+        tracing::info!("开始检测微信进程...");
 
         // 我们需要克隆 self 所指向的数据，而不是克隆引用本身。
         // `self` 是 `&WindowsProcessDetector`，所以 `self.clone()` 会调用
@@ -284,7 +284,7 @@ impl ProcessDetector for super::WindowsProcessDetector {
             })
             .await??;
 
-        tracing::info!(
+        tracing::debug!(
             "阻塞任务完成，成功检测到 {} 个微信主进程",
             detected_processes.len()
         );

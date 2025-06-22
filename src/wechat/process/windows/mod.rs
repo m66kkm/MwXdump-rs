@@ -32,4 +32,4 @@ pub struct WindowsProcessDetector {
     wechat_process_names: Vec<&'static str>,
 }
 
-pub mod windows_process_detector;
+pub mod process_detector;

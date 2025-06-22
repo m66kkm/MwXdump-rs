@@ -230,7 +230,7 @@ pub fn search_memory_for_pattern(
                         break;
                     }
                 } else {
-                    tracing::warn!("Failed to read memory at {:#x}, skipping region.", scan_ptr);
+                    tracing::debug!("Failed to read memory at {:#x}, skipping region.", scan_ptr);
                     break; 
                 }
             }

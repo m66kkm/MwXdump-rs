@@ -11,7 +11,7 @@ use crate::errors::Result;
 // ===================================================================
 pub async fn execute(context: &ExecutionContext) -> Result<()> {
     let fake_process = model::Process {
-        pid: 19472, // 替换为你要调试的进程ID
+        pid: 21788, // 替换为你要调试的进程ID
         status: model::Status::Online,
     };
 
@@ -270,58 +270,6 @@ fn worker(
     
     Ok(())
 }
-// fn validate_key(handle: HANDLE, addr: usize, counter: Arc<AtomicUsize>) -> Option<String> { 
-//     // 我们的“标准答案”
-//     const TARGET_KEY: &str = "4ced5efc9ecc4b818d16ee782a6d4d2eda3f25a030b143a1aff93a0d322c920b";
-
-//     let mut key_data = vec![0u8; 32];
-//     let mut bytes_read = 0;
-//     let result = unsafe {
-//         ReadProcessMemory(
-//             handle,
-//             addr as *const _,
-//             key_data.as_mut_ptr() as *mut _,
-//             32,
-//             Some(&mut bytes_read),
-//         )
-//     };
-
-//     if result.is_ok() && bytes_read == 32 {
-//         // 将读取到的字节数据编码为十六进制字符串
-//         let found_key_str = hex::encode(&key_data);
-
-//         // =======================================================
-//         //           *** 这是关键的修改 ***
-//         //  比较读取到的 key 是否与我们的“标准答案”匹配
-//         // =======================================================
-//         if found_key_str == TARGET_KEY {
-//             // =======================================================
-//             //           *** 这是关键的修改 ***
-//             // 使用 fetch_add 来原子性地增加计数器并返回旧值
-//             // Ordering::SeqCst 提供了最强的内存顺序保证，适合这种调试场景
-//             // =======================================================
-//             let validation_order = counter.fetch_add(1, Ordering::SeqCst);
-
-//             // 我们在打印时 +1，因为 fetch_add 返回的是增加前的值 (从0开始)
-//             println!(
-//                 "\n🎉 [Validator] SUCCESS! I am the No.{} finder. Target key found at address {:#X}\n",
-//                 validation_order + 1,
-//                 addr
-//             );
-//             return Some(found_key_str);
-//         } else {
-//             // 如果不匹配，我们可以选择性地打印日志来观察找到了哪些“错误”的key
-//             // 注意：这可能会产生大量日志
-//             println!("[Validator] Mismatch. Found key: {} at address {:#X}", found_key_str, addr);
-//         }
-//     } else {
-//         // 读取内存失败
-//         // println!("[Validator] Failed to read memory at address {:#X}", addr);
-//     }
-
-//     // 如果不匹配或读取失败，则返回 None
-//     None
-// }
 
 fn validate_key(
     handle: HANDLE,

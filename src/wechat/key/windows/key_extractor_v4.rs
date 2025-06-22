@@ -46,31 +46,33 @@ impl KeyExtractorV4 {
         process: &WechatProcessInfo,
         memory: &[u8],
     ) -> Result<Option<Vec<u8>>> {
-        if memory.len() < V4_KEY_PATTERN.len() {
-            return Ok(None);
-        }
 
-        // 使用 .rev() 实现从后向前的迭代搜索，对齐Go的LastIndex逻辑
-        for pos in (0..=memory.len() - V4_KEY_PATTERN.len()).rev() {
-            if &memory[pos..pos + V4_KEY_PATTERN.len()] == V4_KEY_PATTERN {
-                if pos < POINTER_SIZE { continue; }
 
-                let pointer_bytes_slice = &memory[(pos - POINTER_SIZE)..pos];
-                let key_address = LittleEndian::read_u64(pointer_bytes_slice);
+        // if memory.len() < V4_KEY_PATTERN.len() {
+        //     return Ok(None);
+        // }
 
-                // 调用内部实现的指针验证
-                if !self.is_valid_pointer(key_address, process.is_64_bit) {
-                    continue;
-                }
+        // // 使用 .rev() 实现从后向前的迭代搜索，对齐Go的LastIndex逻辑
+        // for pos in (0..=memory.len() - V4_KEY_PATTERN.len()).rev() {
+        //     if &memory[pos..pos + V4_KEY_PATTERN.len()] == V4_KEY_PATTERN {
+        //         if pos < POINTER_SIZE { continue; }
 
-                if let Ok(key_candidate) = memory::read_process_memory(process.pid, key_address as usize, KEY_SIZE) {
-                    if self._validate_key_impl(&key_candidate) {
-                        debug!("在内存块偏移 {} 处找到模式，其指针 {:#x} 指向有效密钥", pos, key_address);
-                        return Ok(Some(key_candidate)); // 找到第一个就返回
-                    }
-                }
-            }
-        }
+        //         let pointer_bytes_slice = &memory[(pos - POINTER_SIZE)..pos];
+        //         let key_address = LittleEndian::read_u64(pointer_bytes_slice);
+
+        //         // 调用内部实现的指针验证
+        //         if !self.is_valid_pointer(key_address, process.is_64_bit) {
+        //             continue;
+        //         }
+
+        //         if let Ok(key_candidate) = memory::read_process_memory(process.pid, key_address as usize, KEY_SIZE) {
+        //             if self._validate_key_impl(&key_candidate) {
+        //                 debug!("在内存块偏移 {} 处找到模式，其指针 {:#x} 指向有效密钥", pos, key_address);
+        //                 return Ok(Some(key_candidate)); // 找到第一个就返回
+        //             }
+        //         }
+        //     }
+        // }
         
         Ok(None)
     }
@@ -104,31 +106,6 @@ impl KeyExtractorV4 {
 
             }
         }
-        // 从地址最大的候选位置开始尝试，模拟Go的反向逻辑
-        // for &loc in candidate_locations.iter().rev() {
-        //      tracing::info!("验证密钥{}", hex::encode(key_candidate));
-        //     // if loc < POINTER_SIZE { continue; }
-        //     let pointer_address = loc - POINTER_SIZE;
-
-        //     if let Ok(pointer_bytes) = memory::read_process_memory(process.pid, pointer_address, POINTER_SIZE) {
-        //         let key_address = LittleEndian::read_u64(&pointer_bytes);
-
-        //         // 调用内部实现的指针验证
-        //         if self.is_valid_pointer(key_address, process.is_64_bit) {
-        //             if let Ok(key_candidate) = memory::read_process_memory(process.pid, key_address as usize, KEY_SIZE) {
-        //                 tracing::info!("验证密钥{}", hex::encode(key_candidate));
-        //                 // if self._validate_key_impl(&key_candidate) {
-        //                     // tracing::info!("在地址 {:#x} 的指针结构处成功找到并验证了密钥!", pointer_address);
-        //                     // let key = WeChatKey::new(key_candidate, process.pid, KeyVersion::V40);
-        //                     // return Ok(key);
-        //                 // }
-        //             }
-        //         }
-        //         let key = WeChatKey::new(vec![], process.pid, KeyVersion::V40);
-        //         return Ok(key);
-        //     }
-        // }
-
         Err(WeChatError::KeyExtractionFailed("V4算法未找到有效密钥".to_string()).into())
     }
 }

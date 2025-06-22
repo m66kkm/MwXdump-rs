@@ -43,36 +43,6 @@ impl MemorySearcher {
         Self { config }
     }
     
-    /// 在进程中搜索V3密钥
-    pub async fn search_v3_key(&self, process: &WechatProcessInfo) -> Result<WeChatKey> {
-        info!("开始在进程 {} (PID: {}) 中搜索V3密钥", process.name, process.pid);
-        
-        // 打开进程
-        let api = WindowsApi::open_process(process.pid)?;
-        
-        // 查找WeChatWin.dll模块
-        let module = api.find_module(process.pid, "WeChatWin.dll")?
-            .ok_or_else(|| WeChatError::KeyExtractionFailed("未找到WeChatWin.dll模块".to_string()))?;
-        
-        info!("找到WeChatWin.dll模块: 基址=0x{:X}, 大小={} KB", 
-              module.base_address, module.size / 1024);
-        
-        // 枚举可写内存区域
-        let writable_regions = api.enumerate_writable_regions(&module)?;
-        if writable_regions.is_empty() {
-            return Err(WeChatError::KeyExtractionFailed("未找到可写内存区域".to_string()).into());
-        }
-        
-        info!("找到 {} 个可写内存区域", writable_regions.len());
-        
-        // 检查进程架构
-        let is_64bit = super::winapi::is_64bit_process(api.process_handle)?;
-        info!("进程架构: {}", if is_64bit { "64位" } else { "32位" });
-        
-        // 启动并发搜索
-        self.concurrent_search(api, writable_regions, is_64bit, process.pid).await
-    }
-    
     /// 并发搜索密钥
     async fn concurrent_search(
         &self,

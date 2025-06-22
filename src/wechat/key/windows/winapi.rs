@@ -247,39 +247,6 @@ impl Drop for WindowsApi {
 unsafe impl Send for WindowsApi {}
 unsafe impl Sync for WindowsApi {}
 
-/// 检查进程是否为64位
-pub fn is_64bit_process(handle: HANDLE) -> Result<bool> {
-    use windows::Win32::System::Threading::IsWow64Process;
-    
-    let mut is_wow64 = BOOL::from(false);
-    let result = unsafe { IsWow64Process(handle, &mut is_wow64) };
-    
-    match result {
-        Ok(_) => {
-            // 如果是WOW64进程，说明是32位进程运行在64位系统上
-            // 如果不是WOW64进程，需要进一步判断
-            if is_wow64.as_bool() {
-                Ok(false) // 32位进程
-            } else {
-                // 在64位系统上，非WOW64进程就是64位进程
-                // 在32位系统上，所有进程都是32位的
-                #[cfg(target_pointer_width = "64")]
-                {
-                    Ok(true) // 64位进程
-                }
-                #[cfg(target_pointer_width = "32")]
-                {
-                    Ok(false) // 32位进程
-                }
-            }
-        }
-        Err(e) => {
-            warn!("检查进程架构失败: {}", e);
-            Err(WeChatError::ProcessNotFound.into())
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
