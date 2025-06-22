@@ -1,124 +1,135 @@
-// file: src/wechat/key/windows/key_extractor_v4.rs
+//! 内存搜索和密钥提取模块
+//! 
+//! 实现在进程内存中搜索微信密钥的核心算法
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::thread;
 use crate::errors::{Result, WeChatError};
 use crate::utils::windows::handle::Handle;
-// 确保这里的路径是正确的，指向您的 KeyExtractor trait 定义
-use crate::wechat::key::{KeyExtractor, KeyVersion, WeChatKey};
-use crate::wechat::process::WechatProcessInfo;
-// 这是您确认存在的、真正的内存操作模块
-use crate::utils::windows::memory;
-
-use async_trait::async_trait;
-use std::ops::Deref;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::thread;
-use tokio::task;
-
-use windows::Win32::{
-    Foundation::HANDLE,
-    System::{
-        Diagnostics::Debug::ReadProcessMemory,
-        Memory::{
-            VirtualQueryEx, MEMORY_BASIC_INFORMATION, MEM_COMMIT, MEM_PRIVATE, PAGE_EXECUTE_READ,
-            PAGE_EXECUTE_READWRITE, PAGE_PROTECTION_FLAGS, PAGE_READONLY, PAGE_READWRITE,
-        },
-        Threading::{
-            OpenProcess, PROCESS_ACCESS_RIGHTS, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
+use windows::{
+    Win32::{
+        Foundation::HANDLE,
+        System::{
+            Diagnostics::Debug::ReadProcessMemory,
+            Memory::{
+                VirtualQueryEx, MEMORY_BASIC_INFORMATION, MEM_COMMIT, MEM_PRIVATE,
+                PAGE_READWRITE,
+            },
+            Threading::{
+                OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
+            },
         },
     },
 };
 
-// --- 常量定义 ---
-// const V4_KEY_PATTERN: [u8; 24]] = [
-//     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-//     0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-//     0x2F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-// ];
+/// 内存搜索配置
+#[derive(Debug, Clone)]
+pub struct SearchConfig {
+    /// 最大工作线程数
+    pub max_workers: usize,
+    /// 内存通道缓冲区大小
+    pub memory_channel_buffer: usize,
+    /// 最小内存区域大小（字节）
+    pub min_region_size: usize,
+}
 
-const V4_KEY_PATTERN: [u8; 24] = [
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x2F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-];
-const POINTER_SIZE: usize = 8;
-const KEY_SIZE: usize = 32;
-
-#[derive(Clone)]
-pub struct KeyExtractorV4 {}
-
-impl KeyExtractorV4 {
-    pub fn new() -> Result<Self> {
-        Ok(Self {})
+impl Default for SearchConfig {
+    fn default() -> Self {
+        Self {
+            max_workers: std::cmp::min(num_cpus::get(), 16),
+            memory_channel_buffer: 100,
+            min_region_size: 1024 * 1024, // 1MB
+        }
     }
+}
 
-    /// 内部实现的、自包含的指针验证函数
-    fn is_valid_pointer(&self, ptr: u64, is_64bit: bool) -> bool {
-        if is_64bit {
-            // 检查指针是否在有效的64位用户空间地址范围内
-            ptr > 0x10000 && ptr < 0x00007FFFFFFFFFFF
-        } else {
-            // 检查指针是否在有效的32位用户空间地址范围内
-            ptr > 0x10000 && ptr < 0x7FFFFFFF
+/// 搜索结果
+#[derive(Debug, Clone)]
+pub struct SearchResult {
+    /// 找到的密钥
+    pub key: String,
+    /// 密钥地址
+    pub address: usize,
+    /// 验证顺序
+    pub order: usize,
+}
+
+/// 内存搜索器
+pub struct MemorySearcher {
+    /// 搜索模式
+    pattern: Vec<u8>,
+    /// 密钥限制数量
+    key_limit: usize,
+    /// 搜索配置
+    config: SearchConfig,
+    /// 目标密钥（用于验证）
+    target_key: String,
+}
+
+impl MemorySearcher {
+    /// 创建新的内存搜索器
+    pub fn new(pattern: Vec<u8>, key_limit: usize) -> Self {
+        Self {
+            pattern,
+            key_limit,
+            config: SearchConfig::default(),
+            target_key: "4ced5efc9ecc4b818d16ee782a6d4d2eda3f25a030b143a1aff93a0d322c920b".to_string(),
         }
     }
 
-    /// 核心同步实现：在给定的内存块中进行反向搜索。
-    fn _search_key_in_memory_impl(
-        &self,
-        process: &WechatProcessInfo,
-        memory: &[u8],
-    ) -> Result<Option<Vec<u8>>> {
-        Ok(None)
+    /// 使用自定义配置创建内存搜索器
+    pub fn with_config(pattern: Vec<u8>, key_limit: usize, config: SearchConfig) -> Self {
+        Self {
+            pattern,
+            key_limit,
+            config,
+            target_key: "4ced5efc9ecc4b818d16ee782a6d4d2eda3f25a030b143a1aff93a0d322c920b".to_string(),
+        }
     }
 
-    /// 核心同步实现(验证逻辑)
-    fn _validate_key_impl(&self, key: &[u8]) -> bool {
-        key.len() == KEY_SIZE && !key.iter().all(|&b| b == 0)
-    }
-
-    /// 核心同步实现(总指挥)
-    fn _extract_key_impl(&self, process: &WechatProcessInfo) -> Result<WeChatKey> {
+    /// 在指定进程中搜索密钥
+    pub fn search_keys(&self, pid: u32) -> Result<Vec<SearchResult>> {
         // 创建跨线程通道
         let (mem_sender, mem_receiver) = crossbeam_channel::unbounded::<Vec<u8>>();
-        let (result_sender, result_receiver) = crossbeam_channel::bounded::<String>(1);
+        let (result_sender, result_receiver) = crossbeam_channel::unbounded::<SearchResult>();
 
         // 创建全局停止信号
         let stop_signal = Arc::new(AtomicBool::new(false));
-
-        // =======================================================
-        //           *** 这是新增的部分 ***
-        // 创建一个原子计数器，用于记录找到答案的次数
-        // =======================================================
-        let success_counter = Arc::new(AtomicUsize::new(0)); // 追踪成功次数
-        let failure_counter = Arc::new(AtomicUsize::new(0)); // 追踪失败次数
-        let pid = process.pid;
+        
+        // 创建计数器
+        let success_counter = Arc::new(AtomicUsize::new(0));
+        let failure_counter = Arc::new(AtomicUsize::new(0));
 
         // 启动 Worker 线程
-        let worker_count = num_cpus::get().max(2);
-        tracing::debug!("[KeyExtractorV4] 启动 {} workers...", worker_count);
+        let worker_count = self.config.max_workers;
+        println!("[MemorySearcher] 启动 {} workers...", worker_count);
         let mut worker_handles = Vec::new();
+        
         for i in 0..worker_count {
             let receiver = mem_receiver.clone();
             let sender = result_sender.clone();
             let stop = Arc::clone(&stop_signal);
-            // 克隆计数器的 Arc 指针
-            // 克隆两个计数器的 Arc 指针
             let success_clone = Arc::clone(&success_counter);
             let failure_clone = Arc::clone(&failure_counter);
+            let pattern = self.pattern.clone();
+            let target_key = self.target_key.clone();
+            let key_limit = self.key_limit;
 
             worker_handles.push(
                 thread::Builder::new()
-                    .name(format!("worker-{}", i))
+                    .name(format!("mem-worker-{}", i))
                     .spawn(move || {
-                        // 将计数器传递给 worker
-                        let _ = KeyExtractorV4::worker_impl(
+                        let _ = Self::worker_impl(
                             pid,
                             receiver,
                             sender,
                             stop,
                             success_clone,
                             failure_clone,
+                            pattern,
+                            target_key,
+                            key_limit,
                         );
                     })
                     .unwrap(),
@@ -126,56 +137,56 @@ impl KeyExtractorV4 {
         }
 
         // 当 result_sender 的最后一个克隆离开作用域时，channel 会关闭
-        // 我们在 worker 中有克隆，所以在这里 drop 不会立即关闭
         drop(result_sender);
 
         // 启动 Producer 线程
-        println!("[Main] Starting producer...");
+        println!("[MemorySearcher] Starting producer...");
         let producer_stop_signal = Arc::clone(&stop_signal);
         let producer_handle = thread::Builder::new()
-            .name("producer".to_string())
+            .name("mem-producer".to_string())
             .spawn(move || {
-                KeyExtractorV4::find_memory_impl(pid, mem_sender, producer_stop_signal);
+                Self::find_memory_impl(pid, mem_sender, producer_stop_signal);
             })
             .unwrap();
 
         // 等待生产者完成
         producer_handle.join().expect("Producer thread panicked");
-        println!("[Main] Producer finished.");
+        println!("[MemorySearcher] Producer finished.");
 
         // 等待所有 worker 完成
         for handle in worker_handles {
             handle.join().expect("Worker thread panicked");
         }
-        println!("[Main] All workers finished.");
+        println!("[MemorySearcher] All workers finished.");
 
-        // 获取结果
-        println!("[Main] Retrieving result...");
-        if let Ok(key_hex) = result_receiver.try_recv() {
-            // 成功找到密钥
-            let key_data = hex::decode(&key_hex)
-                .map_err(|e| WeChatError::KeyExtractionFailed(format!("无法解码密钥: {}", e)))?;
-            return Ok(WeChatKey::new(key_data, pid, KeyVersion::V40));
+        // 收集结果
+        let mut results = Vec::new();
+        while let Ok(result) = result_receiver.try_recv() {
+            results.push(result);
         }
 
-        // 未找到密钥
-        Err(WeChatError::KeyExtractionFailed("V4算法未找到有效密钥".to_string()).into())
+        // 按验证顺序排序
+        results.sort_by_key(|r| r.order);
+
+        // 根据key_limit限制返回结果
+        if results.len() > self.key_limit {
+            results.truncate(self.key_limit);
+        }
+
+        Ok(results)
     }
 
-    // ===================================================================
-    // 4. [优化] 消费者函数 (worker)
-    // - 增加了 stop_signal 参数。
-    // - 找到 key 后，设置停止信号。
-    // - 在处理每个内存块前检查信号，避免不必要的工作。
-    // ===================================================================
-    // worker 函数实现
+    /// Worker 线程实现
     fn worker_impl(
         pid: u32,
         receiver: crossbeam_channel::Receiver<Vec<u8>>,
-        sender: crossbeam_channel::Sender<String>,
+        sender: crossbeam_channel::Sender<SearchResult>,
         stop_signal: Arc<AtomicBool>,
         success_counter: Arc<AtomicUsize>,
         failure_counter: Arc<AtomicUsize>,
+        pattern: Vec<u8>,
+        target_key: String,
+        key_limit: usize,
     ) -> anyhow::Result<()> {
         let process_handle = match Handle::new(unsafe {
             match OpenProcess(PROCESS_VM_READ, false, pid) {
@@ -202,13 +213,13 @@ impl KeyExtractorV4 {
                 break;
             }
 
-            for (i, window) in memory.windows(V4_KEY_PATTERN.len()).enumerate().rev() {
+            for (i, window) in memory.windows(pattern.len()).enumerate().rev() {
                 // 每处理100个窗口检查一次停止信号，避免不必要的处理
                 if i % 100 == 0 && stop_signal.load(Ordering::SeqCst) {
                     return Ok(());
                 }
 
-                if window == V4_KEY_PATTERN {
+                if window == pattern {
                     let ptr_start_index = i.saturating_sub(ptr_size);
                     if ptr_start_index < i {
                         let ptr_bytes = &memory[ptr_start_index..i];
@@ -219,18 +230,19 @@ impl KeyExtractorV4 {
                                 return Ok(());
                             }
 
-                            // 调用简化的验证函数
-                            match KeyExtractorV4::validate_key_impl(
-                                *process_handle, 
+                            // 调用验证函数
+                            match Self::validate_key_impl(
+                                *process_handle,
                                 ptr_value,
-                                Arc::clone(&stop_signal), // 传递停止信号
+                                Arc::clone(&stop_signal),
+                                &target_key,
                             ) {
                                 Some(key) => {
                                     // 成功路径：在worker层面处理统计
                                     let validation_order = success_counter.fetch_add(1, Ordering::SeqCst);
                                     
-                                    // 如果这不是第一个成功的验证，则不处理
-                                    if validation_order > 0 {
+                                    // 检查是否超过key_limit
+                                    if validation_order >= key_limit {
                                         return Ok(());
                                     }
                                     
@@ -241,14 +253,22 @@ impl KeyExtractorV4 {
                                         ptr_value
                                     );
                                     
-                                    println!("[Worker] Correct key validated! Raising stop signal.");
-                                    // 使用SeqCst确保所有线程立即看到更新
-                                    stop_signal.store(true, Ordering::SeqCst);
-                                    let _ = sender.try_send(key);
-
-                                    // 清空接收队列中的所有剩余内存块
-                                    while receiver.try_recv().is_ok() {}
-                                    return Ok(());
+                                    let result = SearchResult {
+                                        key,
+                                        address: ptr_value,
+                                        order: validation_order,
+                                    };
+                                    
+                                    let _ = sender.try_send(result);
+                                    
+                                    // 如果达到key_limit，设置停止信号
+                                    if validation_order + 1 >= key_limit {
+                                        println!("[Worker] Key limit reached. Raising stop signal.");
+                                        stop_signal.store(true, Ordering::SeqCst);
+                                        // 清空接收队列中的所有剩余内存块
+                                        while receiver.try_recv().is_ok() {}
+                                        return Ok(());
+                                    }
                                 }
                                 None => {
                                     // 失败路径：在worker层面处理统计
@@ -272,6 +292,7 @@ impl KeyExtractorV4 {
         Ok(())
     }
 
+    /// Producer 线程实现 - 扫描进程内存
     fn find_memory_impl(
         pid: u32,
         sender: crossbeam_channel::Sender<Vec<u8>>,
@@ -382,17 +403,17 @@ impl KeyExtractorV4 {
         println!("[Producer] Memory scan finished. Closing sender channel.");
     }
 
+    /// 验证密钥实现
     fn validate_key_impl(
-        handle: HANDLE, // 直接接收 HANDLE 值
+        handle: HANDLE,
         addr: usize,
-        stop_signal: Arc<AtomicBool>, // 停止信号参数
+        stop_signal: Arc<AtomicBool>,
+        target_key: &str,
     ) -> Option<String> {
         // 在验证前先检查停止信号，如果已经设置了停止信号，则不再验证
         if stop_signal.load(Ordering::SeqCst) {
             return None;
         }
-
-        const TARGET_KEY: &str = "4ced5efc9ecc4b818d16ee782a6d4d2eda3f25a030b143a1aff93a0d322c920b";
 
         let mut key_data = vec![0u8; 32];
         let mut bytes_read = 0;
@@ -408,7 +429,7 @@ impl KeyExtractorV4 {
 
         if result.is_ok() && bytes_read == 32 {
             let found_key_str = hex::encode(&key_data);
-            if found_key_str == TARGET_KEY {
+            if found_key_str == target_key {
                 // 成功路径：直接返回找到的key，不进行统计
                 return Some(found_key_str);
             }
@@ -416,37 +437,5 @@ impl KeyExtractorV4 {
         
         // 失败路径：直接返回None，不进行统计
         None
-    }
-}
-
-#[async_trait]
-// 为 KeyExtractorV4 实现您定义的 KeyExtractor trait
-impl KeyExtractor for KeyExtractorV4 {
-    async fn extract_key(&self, process: &WechatProcessInfo) -> Result<WeChatKey> {
-        let self_clone = self.clone();
-        let process_clone = process.clone(); // 假设 WechatProcessInfo 实现了 Clone
-        task::spawn_blocking(move || self_clone._extract_key_impl(&process_clone)).await?
-    }
-
-    async fn search_key_in_memory(
-        &self,
-        memory: &[u8],
-        process: &WechatProcessInfo,
-    ) -> Result<Option<Vec<u8>>> {
-        let self_clone = self.clone();
-        let memory_vec = memory.to_vec();
-        let process_clone = process.clone();
-        task::spawn_blocking(move || {
-            self_clone._search_key_in_memory_impl(&process_clone, &memory_vec)
-        })
-        .await?
-    }
-
-    async fn validate_key(&self, key: &[u8]) -> Result<bool> {
-        Ok(self._validate_key_impl(key))
-    }
-
-    fn supported_version(&self) -> KeyVersion {
-        KeyVersion::V40
     }
 }
