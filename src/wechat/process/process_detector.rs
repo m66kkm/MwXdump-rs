@@ -28,6 +28,6 @@ pub trait ProcessDetector: Send + Sync {
 
 
 /// 创建平台特定的进程检测器
-pub fn create_detector() -> Result<Detector> {
+pub fn create_process_detector() -> Result<Detector> {
     Detector::create_wechat_detector()
 }

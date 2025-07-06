@@ -5,7 +5,7 @@ use anyhow::Context;
 use crate::cli::commands::process;
 use crate::cli::context::ExecutionContext;
 use crate::errors::Result;
-use crate::wechat::process::{create_detector, ProcessDetector};
+use crate::wechat::process::{create_process_detector, ProcessDetector};
 /// 执行进程检测测试
 pub async fn execute(context: &ExecutionContext) -> Result<()> {
     tracing::info!("开始测试微信进程检测功能...");
@@ -15,7 +15,7 @@ pub async fn execute(context: &ExecutionContext) -> Result<()> {
         tracing::debug!("配置的微信数据目录: {:?}", data_dir);
     }
 
-    let detector = create_detector().context("初始化检测器失败")?;
+    let detector = create_process_detector().context("初始化检测器失败")?;
 
     let processes = detector
         .detect_processes()

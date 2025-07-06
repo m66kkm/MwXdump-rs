@@ -6,9 +6,12 @@ use async_trait::async_trait;
 use std::path::Path;
 use crate::errors::Result;
 
-pub mod common;
-pub mod v4;
-pub mod validator;
+pub mod decrypt_files;
+pub mod decrypt_common;
+pub mod decrypt_algorithm_v4;
+pub mod decrypt_validator;
+
+pub use decrypt_files::DecryptionProcessor;
 
 /// 解密器版本
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,7 +123,7 @@ pub trait Decryptor: Send + Sync {
 /// 对应版本的解密器实例
 pub fn create_decryptor(version: DecryptVersion) -> Box<dyn Decryptor> {
     match version {
-        DecryptVersion::V4 => Box::new(v4::V4Decryptor::new()),
+        DecryptVersion::V4 => Box::new(decrypt_algorithm_v4::V4Decryptor::new()),
     }
 }
 

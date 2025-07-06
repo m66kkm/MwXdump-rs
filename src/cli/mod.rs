@@ -39,31 +39,7 @@ pub enum Commands {
     Process,
 
     /// 解密数据文件
-    Decrypt {
-        /// 加密的数据库文件路径或目录路径
-        #[arg(short, long)]
-        input: std::path::PathBuf,
-        
-        /// 解密后的输出文件路径或目录路径
-        #[arg(short, long)]
-        output: Option<std::path::PathBuf>,
-        
-        /// 密钥（十六进制格式，32字节）
-        #[arg(short, long)]
-        key: String,
-        
-        /// 指定版本（v3或v4），不指定则自动检测
-        #[arg(short, long)]
-        version: Option<String>,
-        
-        /// 仅验证密钥，不进行解密
-        #[arg(long)]
-        validate_only: bool,
-        
-        /// 并发处理的线程数，默认为CPU核心数
-        #[arg(long, default_value = "0")]
-        threads: usize,
-    },
+    Decrypt(commands::decrypt::DecryptArgs),
     /// 启动HTTP服务器
     // Server,
     
@@ -102,23 +78,8 @@ impl Cli {
                 commands::key::execute(context).await
             }
 
-            Some(Commands::Decrypt {
-                input,
-                output,
-                key,
-                version,
-                validate_only,
-                threads
-            }) => {
-                let args = commands::decrypt::DecryptArgs {
-                    input,
-                    output,
-                    key,
-                    version,
-                    validate_only,
-                    threads,
-                };
-                commands::decrypt::handle_decrypt(context, args).await
+            Some(Commands::Decrypt(args)) => {
+                commands::decrypt::execute(context, args).await
             }
             Some(Commands::Version) => {
                 commands::version::execute(context).await

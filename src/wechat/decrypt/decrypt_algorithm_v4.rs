@@ -9,7 +9,7 @@ use zeroize::Zeroize;
 
 use crate::errors::{Result, WeChatError};
 use super::{
-    common::{
+    decrypt_common::{
         derive_keys_v4, is_database_encrypted, decrypt_page, verify_page_hmac,
         SALT_SIZE, SQLITE_HEADER,
     },

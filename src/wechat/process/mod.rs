@@ -7,4 +7,4 @@ mod macos;
 
 pub use process_detector::ProcessDetector;
 pub use wechat_process_info::WechatProcessInfo;
-pub use process_detector::create_detector;
+pub use process_detector::create_process_detector;

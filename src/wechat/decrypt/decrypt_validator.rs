@@ -4,7 +4,7 @@ use std::path::Path;
 use tracing::{debug, info};
 
 use crate::errors::Result;
-use super::{DecryptVersion, Decryptor, v4::V4Decryptor};
+use super::{DecryptVersion, Decryptor, decrypt_algorithm_v4::V4Decryptor};
 
 /// 密钥验证器
 pub struct KeyValidator {
