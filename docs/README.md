@@ -27,7 +27,11 @@
 - [`wechat-process-refactor-completion.md`](./wechat-process-refactor-completion.md) - 微信进程重构完成报告
 - [`wechat-data-directory-enhancement-completion.md`](./wechat-data-directory-enhancement-completion.md) - 微信数据目录查找功能增强完成报告
 
-### 🔧 技术分析文档
+### 📊 状态更新文档
+- [`status/2025-07-06-status-update.md`](./status/2025-07-06-status-update.md) - 2025年7月6日项目状态更新
+- [`status/2025-07-06-evening-status-update.md`](./status/2025-07-06-evening-status-update.md) - 2025年7月6日晚间状态更新（解密模块重构完成）
+
+###  技术分析文档
 - [`decrypt-analysis.md`](./decrypt-analysis.md) - 解密功能技术分析
 - [`wechat-process-refactor-diagram.md`](./wechat-process-refactor-diagram.md) - 微信进程重构架构图
 - [`wechat-process-refactor-plan-revised.md`](./wechat-process-refactor-plan-revised.md) - 微信进程重构修订计划
