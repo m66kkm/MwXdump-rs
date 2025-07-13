@@ -15,7 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 # 异步运行时
-tokio = { version = "1.45", features = ["full"] }
+tokio = { version = "1.46", features = ["full"] }
 async-trait = "0.1"
 futures = "0.3"
 
@@ -67,8 +67,8 @@ lz4 = "1.28"
 flate2 = "1.1"
 
 # 配置
-config = "0.15"
-toml = "0.8"
+config = "^0.15"
+toml = "^0.9"
 
 # 工具
 uuid = { version = "1.17", features = ["v4", "serde"] }
@@ -80,16 +80,18 @@ lazy_static = "1.5"
 dirs = "6.0"
 
 # 系统信息
-sysinfo = "0.35"
+sysinfo = "^0.36"
 num_cpus = "1.17"
 
 # HTTP客户端
 reqwest = { version = "0.12", features = ["json", "stream"] }
 
 # 文件监控
-notify = "8.0"
+notify = "8.1"
 
 crossbeam-channel = "0.5"
+
+rmcp = { version = "0.2.1", features = ["server"] }
 
 
 # 平台特定
@@ -111,7 +113,7 @@ windows = {version = "0.61", features = [
 windows-result = {version = "0.3"}
 
 [target.'cfg(target_os = "macos")'.dependencies]
-libc = "0.2.173"
+libc = "^0.2.173"
 
 [dev-dependencies]
 tokio-test = "0.4"
@@ -119,7 +121,7 @@ tempfile = "3.20"
 mockall = "0.13.1"
 
 [build-dependencies]
-prost-build = "0.14.0"
+prost-build = "^0.14"
 
 [profile.release]
 lto = true
